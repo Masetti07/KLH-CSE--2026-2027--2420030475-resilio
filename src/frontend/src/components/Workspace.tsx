@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { artifactUrl, createDesign, deleteDesign, duplicateDesign, listDesigns, loadStructure, loadSystemStatus, runVastuAnalysis, saveDesign, saveStructure, sendSystemTelemetry, uploadPlan } from "../api";
-import type { AdaptationEvent, Design, DesignConfiguration, Selection, Structure, SystemMetrics, SystemState, UploadResult, VastuAnalysis } from "../types";
+import { activateSimulation, artifactUrl, clearSimulation, createDesign, deleteDesign, duplicateDesign, listDesigns, loadSimulationStatus, loadStructure, loadSystemStatus, restoreAllSimulations, runVastuAnalysis, saveDesign, saveStructure, sendSystemTelemetry, uploadPlan } from "../api";
+import type { AdaptationEvent, Design, DesignConfiguration, Selection, SimulationScenario, SimulationStatus, Structure, SystemMetrics, SystemState, UploadResult, VastuAnalysis } from "../types";
 import { cloneStructure, commitHistory, initialHistory, redoHistory, undoHistory } from "../utils/editState";
 import { cloneConfiguration, reconcileDesignConfiguration } from "../utils/designState";
 import { confirmDiscardForNewFile, newFileResetState } from "../utils/sessionState";
-import { readSnapshotHistory, writeWorkingSnapshot, type WorkingSnapshot } from "../utils/autosave";
+import { injectCorruptedNewestSnapshot, readSnapshotHistory, writeWorkingSnapshot, type WorkingSnapshot } from "../utils/autosave";
 import ComparePanel from "./ComparePanel";
 import ControlCenter from "./ControlCenter";
 import DesignManager from "./DesignManager";
 import PlanSvg from "./PlanSvg";
 import RendererBoundary from "./RendererBoundary";
+import ResilienceLab from "./ResilienceLab";
 import RoomAssignments from "./RoomAssignments";
 import StructureInspector from "./StructureInspector";
 import ThreeViewer from "./ThreeViewer";
@@ -17,7 +18,7 @@ import VastuPanel from "./VastuPanel";
 
 type Tab = "Original" | "Processed" | "Reconstruction" | "3D View";
 type Mode = "view" | "edit";
-type StudioSection = "Structure" | "Design Studio" | "Vastu" | "Compare" | "Control Center";
+type StudioSection = "Structure" | "Design Studio" | "Vastu" | "Compare" | "Control Center" | "Resilience Lab";
 const STORAGE_KEY = "resiliospace:last-plan";
 
 export default function Workspace() {
@@ -32,6 +33,7 @@ export default function Workspace() {
   const [compareAId, setCompareAId] = useState(""); const [compareBId, setCompareBId] = useState(""); const [compareVisualId, setCompareVisualId] = useState("");
   const [systemState, setSystemState] = useState<SystemState | null>(null); const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null); const [adaptations, setAdaptations] = useState<AdaptationEvent[]>([]); const [systemError, setSystemError] = useState<string | null>(null);
   const [rendererUnavailable, setRendererUnavailable] = useState(false); const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
+  const [simulationStatus, setSimulationStatus] = useState<SimulationStatus | null>(null); const [simulationBusy, setSimulationBusy] = useState(false); const [simulationError, setSimulationError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null); const restorationAttempted = useRef(false); const structure = history.present;
   const dirty = useMemo(() => Boolean(structure && savedSnapshot && JSON.stringify(structure) !== savedSnapshot), [structure, savedSnapshot]);
   const designDirty = useMemo(() => Boolean(activeDesign && designConfiguration && JSON.stringify({ name: activeDesign.name, configuration: designConfiguration }) !== designSnapshot), [activeDesign, designConfiguration, designSnapshot]);
@@ -60,7 +62,7 @@ export default function Workspace() {
   }, []);
   useEffect(() => {
     let active = true;
-    const refresh = () => loadSystemStatus().then((value) => { if (!active) return; setSystemState(value.state); setSystemMetrics(value.metrics); setAdaptations(value.adaptations); setSystemError(null); }).catch((reason) => { if (active) setSystemError(reason instanceof Error ? reason.message : "Unknown status error"); });
+    const refresh = () => Promise.all([loadSystemStatus(), loadSimulationStatus()]).then(([value, simulation]) => { if (!active) return; setSystemState(value.state); setSystemMetrics(value.metrics); setAdaptations(value.adaptations); setSimulationStatus(simulation.simulations); setSystemError(null); }).catch((reason) => { if (active) setSystemError(reason instanceof Error ? reason.message : "Unknown status error"); });
     void refresh(); const timer = window.setInterval(refresh, 5000); return () => { active = false; window.clearInterval(timer); };
   }, []);
   useEffect(() => {
@@ -72,7 +74,7 @@ export default function Workspace() {
     }, 1200);
     return () => window.clearTimeout(timer);
   }, [result, structure, designConfiguration, activeDesign?.id, activeDesign?.name]);
-  useEffect(() => { if (systemState?.use_2d_fallback) { setRendererUnavailable(true); setSection("Structure"); setTab("Reconstruction"); setFullscreen3D(false); } }, [systemState?.use_2d_fallback]);
+  useEffect(() => { if (systemState?.use_2d_fallback) { setRendererUnavailable(true); setSection("Structure"); setTab("Reconstruction"); setFullscreen3D(false); setRecoveryMessage("3D rendering is temporarily unavailable. Your design is preserved and the 2D workspace remains available."); } }, [systemState?.use_2d_fallback]);
   useEffect(() => { const handleEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setFullscreen3D(false); }; window.addEventListener("keydown", handleEscape); return () => window.removeEventListener("keydown", handleEscape); }, []);
   useEffect(() => { if (section !== "Design Studio" && section !== "Compare" && !(section === "Structure" && tab === "3D View")) setFullscreen3D(false); }, [section, tab]);
   useEffect(() => {
@@ -132,6 +134,55 @@ export default function Workspace() {
   const reportRenderer = (fps: number, frameTime: number) => { void sendSystemTelemetry({ fps, frame_time_ms: frameTime, renderer_health: fps < 24 ? "SLOW" : "HEALTHY" }).then(setSystemState).catch(() => undefined); };
   const rendererFailed = () => { setRendererUnavailable(true); setSection("Structure"); setTab("Reconstruction"); setFullscreen3D(false); void sendSystemTelemetry({ renderer_health: "FAILED" }).then(setSystemState).catch(() => undefined); };
   const retryRenderer = () => { setRendererUnavailable(false); setSection("Structure"); setTab("3D View"); void sendSystemTelemetry({ renderer_health: "UNKNOWN" }).then(setSystemState).catch(() => undefined); };
+  const refreshAdaptationViews = async () => {
+    const [current, simulations] = await Promise.all([loadSystemStatus(), loadSimulationStatus()]);
+    setSystemState(current.state); setSystemMetrics(current.metrics); setAdaptations(current.adaptations); setSimulationStatus(simulations.simulations);
+  };
+  const currentWorkingSnapshot = (): WorkingSnapshot | null => result && structure && designConfiguration ? {
+    schema_version: 1, metadata: { created_at: new Date().toISOString(), plan_id: result.plan.id, design_id: activeDesign?.id ?? null, design_name: activeDesign?.name ?? null },
+    payload: { plan: result.plan, structure, design_configuration: designConfiguration },
+  } : null;
+  const runSimulation = async (scenario: SimulationScenario) => {
+    setSimulationBusy(true); setSimulationError(null);
+    try {
+      let recovered = false;
+      if (scenario === "autosave_corruption") {
+        const snapshot = currentWorkingSnapshot();
+        if (!snapshot) throw new Error("A loaded design is required for the autosave recovery demonstration.");
+        writeWorkingSnapshot(snapshot);
+        const recovery = injectCorruptedNewestSnapshot(snapshot.metadata.plan_id);
+        if (recovery.snapshot) {
+          recovered = true; setHistory(initialHistory(recovery.snapshot.payload.structure)); setDesignConfiguration(reconcileDesignConfiguration(recovery.snapshot.payload.design_configuration, recovery.snapshot.payload.structure));
+          setRecoveryMessage("The simulated invalid latest snapshot was rejected. ResilioSpace recovered the previous valid design state.");
+        }
+      }
+      const response = await activateSimulation(scenario); setSimulationStatus(response.simulations); setSystemState(response.system);
+      if (scenario === "autosave_corruption") setSystemState(await sendSystemTelemetry({ session_corrupted: true, autosave_health: recovered ? "HEALTHY" : "FAILED" }));
+      await refreshAdaptationViews();
+    } catch (reason) { setSimulationError(reason instanceof Error ? reason.message : "The controlled simulation failed safely."); }
+    finally { setSimulationBusy(false); }
+  };
+  const clearScenario = async (scenario: SimulationScenario) => {
+    setSimulationBusy(true); setSimulationError(null);
+    try {
+      if (scenario === "autosave_corruption") { const snapshot = currentWorkingSnapshot(); if (snapshot) writeWorkingSnapshot(snapshot); }
+      const response = await clearSimulation(scenario); setSimulationStatus(response.simulations); setSystemState(response.system);
+      if (scenario === "renderer_failure") { setRendererUnavailable(false); setSection("Structure"); setTab("3D View"); }
+      await refreshAdaptationViews();
+    } catch (reason) { setSimulationError(reason instanceof Error ? reason.message : "The controlled simulation could not be cleared."); }
+    finally { setSimulationBusy(false); }
+  };
+  const restoreSimulations = async () => {
+    setSimulationBusy(true); setSimulationError(null);
+    try {
+      const rendererWasSimulated = simulationStatus?.scenarios.renderer_failure.active;
+      const snapshot = currentWorkingSnapshot(); if (snapshot) writeWorkingSnapshot(snapshot);
+      const response = await restoreAllSimulations(); setSimulationStatus(response.simulations); setSystemState(response.system);
+      if (rendererWasSimulated) { setRendererUnavailable(false); setSection("Structure"); setTab("3D View"); }
+      await refreshAdaptationViews();
+    } catch (reason) { setSimulationError(reason instanceof Error ? reason.message : "The controlled simulations could not be restored."); }
+    finally { setSimulationBusy(false); }
+  };
 
   const is3D = Boolean(structure) && (section === "Design Studio" || section === "Compare" || (section === "Structure" && tab === "3D View"));
   const showInspector = Boolean(structure) && (section === "Design Studio" || (section === "Structure" && (tab === "Reconstruction" || tab === "3D View")));
@@ -147,16 +198,17 @@ export default function Workspace() {
         <button className="primary-button process-button" disabled={!selectedFile || status === "processing"} onClick={process}>{status === "processing" ? <><span className="spinner" /> Processing plan…</> : "Detect structure"}</button>
         <div className={`status-box ${status}`} role="status" aria-live="polite"><span className="status-dot" /><div><strong>{status === "idle" ? "Ready" : status === "selected" ? "New plan selected" : status === "processing" ? "Processing" : status === "saving" ? "Saving" : status === "complete" ? dirty ? "Unsaved structure" : "Structure saved" : "Needs attention"}</strong><p>{status === "idle" ? "Select a supported clean floor plan." : status === "selected" ? "Click Detect Structure to process this plan." : status === "processing" ? "Running the floor-plan processing pipeline." : status === "saving" ? "Validating and persisting the structural model." : status === "complete" ? dirty ? "Save to persist corrected geometry." : "Structural model is persisted." : error}</p></div></div>
         {structure && <><div className="candidate-counts"><div><strong>{structure.walls.length}</strong><span>Walls</span></div><div><strong>{structure.rooms.length}</strong><span>Rooms</span></div><div><strong>{structure.openings.length}</strong><span>Openings</span></div></div><div className="history-actions"><button disabled={!history.past.length} onClick={() => setHistory(undoHistory)}>Undo</button><button disabled={!history.future.length} onClick={() => setHistory(redoHistory)}>Redo</button><button className="save-button" disabled={!dirty || status === "saving"} onClick={save}>Save structure</button></div>{effectiveWallHeight !== undefined && <label className="height-control"><span>Structural wall height <strong>{effectiveWallHeight.toFixed(1)} m</strong></span><input type="range" min="2" max="5" step="0.1" value={effectiveWallHeight} onChange={(event) => updateHeight(Number(event.target.value))} /></label>}</>}
-        {structure && section !== "Structure" && <DesignManager designs={designs} active={activeDesign} configuration={designConfiguration} dirty={designDirty} busy={designBusy} onLoad={loadDesign} onNameChange={(name) => setActiveDesign((current) => current ? { ...current, name } : current)} onConfigurationChange={updateDesignConfiguration} onCreate={createNewDesign} onSave={() => { void saveActiveDesign(); }} onDuplicate={duplicateActiveDesign} onDelete={removeActiveDesign} />}
+        {structure && ["Design Studio", "Vastu", "Compare"].includes(section) && <DesignManager designs={designs} active={activeDesign} configuration={designConfiguration} dirty={designDirty} busy={designBusy} onLoad={loadDesign} onNameChange={(name) => setActiveDesign((current) => current ? { ...current, name } : current)} onConfigurationChange={updateDesignConfiguration} onCreate={createNewDesign} onSave={() => { void saveActiveDesign(); }} onDuplicate={duplicateActiveDesign} onDelete={removeActiveDesign} />}
         {designError && <p className="design-error" role="alert">{designError}</p>}</div>
       </aside>
       <div className="canvas-panel">
-        {structure && <div className="studio-tabs" role="tablist" aria-label="Workspace sections">{(["Structure", "Design Studio", "Vastu", "Compare", "Control Center"] as StudioSection[]).map((item) => <button key={item} role="tab" aria-selected={section === item} onClick={() => setSection(item)}>{item}</button>)}</div>}
-        {section === "Structure" && <><div className="tabs" role="tablist" aria-label="Plan views">{(["Original", "Processed", "Reconstruction", "3D View"] as Tab[]).map((item) => <button key={item} role="tab" aria-selected={tab === item} disabled={item !== "Original" && !structure} onClick={() => setTab(item)}>{item}</button>)}</div>{tab === "Reconstruction" && structure && <div className="mode-toolbar"><div className="segmented-control"><button aria-pressed={mode === "view"} onClick={() => setMode("view")}>View</button><button aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>Edit Structure</button></div>{mode === "edit" && <span>Drag selected wall endpoints or openings. Numeric controls are in the inspector.</span>}</div>}<div className={`editor-layout ${showInspector ? "with-inspector" : ""} ${is3D ? "three-layout" : ""} ${is3D && inspectorCollapsed ? "inspector-collapsed" : ""}`}><div className={`plan-canvas ${tab === "3D View" ? "three-host" : ""}`} role="tabpanel">{!previewUrl && !structure ? <div className="empty-canvas"><span aria-hidden="true">⌗</span><strong>Your floor plan will appear here</strong><p>Use a clear, top-down, single-floor residential plan.</p></div> : tab === "Original" ? previewUrl ? <img src={previewUrl} alt="Uploaded original floor plan" /> : <div className="empty-canvas"><strong>Original preview is unavailable after reload.</strong><p>The saved structural model remains available.</p></div> : tab === "Processed" && result ? <img className="processed-image" src={artifactUrl(result.plan.id, "threshold")} alt="Backend threshold processing result" /> : tab === "Reconstruction" && structure ? <PlanSvg structure={structure} editable={mode === "edit"} selection={selection} onSelect={setSelection} onChange={commit} orientation={designConfiguration?.orientation} design={designConfiguration} /> : tab === "3D View" && structure ? <RendererBoundary onFailure={rendererFailed} onReturnTo2D={() => setTab("Reconstruction")}><ThreeViewer structure={structure} design={designConfiguration ?? undefined} selection={selection} onSelect={setSelection} fullscreen={fullscreen3D} onToggleFullscreen={() => setFullscreen3D((value) => !value)} renderingQuality={systemState?.rendering_quality} onTelemetry={reportRenderer} /></RendererBoundary> : null}</div>{showInspector && structure && <StructureInspector structure={structure} selection={selection} onSelect={setSelection} onChange={commit} editable={mode === "edit" && tab === "Reconstruction"} collapsed={is3D && inspectorCollapsed} onToggle={is3D ? () => setInspectorCollapsed((value) => !value) : undefined} />}</div></>}
-        {section === "Design Studio" && structure && designConfiguration && <div className="design-studio-content"><div className={`editor-layout with-inspector three-layout ${inspectorCollapsed ? "inspector-collapsed" : ""}`}><div className="plan-canvas three-host" role="tabpanel"><RendererBoundary onFailure={rendererFailed} onReturnTo2D={() => { setSection("Structure"); setTab("Reconstruction"); }}><ThreeViewer structure={structure} design={designConfiguration} selection={selection} onSelect={setSelection} fullscreen={fullscreen3D} onToggleFullscreen={() => setFullscreen3D((value) => !value)} renderingQuality={systemState?.rendering_quality} onTelemetry={reportRenderer} /></RendererBoundary></div><StructureInspector structure={structure} selection={selection} onSelect={setSelection} onChange={commit} editable={false} collapsed={inspectorCollapsed} onToggle={() => setInspectorCollapsed((value) => !value)} design={designConfiguration} onDesignChange={updateDesignConfiguration} designMode /></div><RoomAssignments structure={structure} configuration={designConfiguration} selection={selection} onSelect={setSelection} onChange={updateDesignConfiguration} /></div>}
+        {structure && <div className="studio-tabs" role="tablist" aria-label="Workspace sections">{(["Structure", "Design Studio", "Vastu", "Compare", "Control Center", "Resilience Lab"] as StudioSection[]).map((item) => <button key={item} role="tab" aria-selected={section === item} onClick={() => setSection(item)}>{item}</button>)}</div>}
+        {section === "Structure" && <><div className="tabs" role="tablist" aria-label="Plan views">{(["Original", "Processed", "Reconstruction", "3D View"] as Tab[]).map((item) => <button key={item} role="tab" aria-selected={tab === item} disabled={item !== "Original" && !structure} onClick={() => setTab(item)}>{item}</button>)}</div>{tab === "Reconstruction" && structure && <div className="mode-toolbar"><div className="segmented-control"><button aria-pressed={mode === "view"} onClick={() => setMode("view")}>View</button><button aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>Edit Structure</button></div>{mode === "edit" && <span>Drag selected wall endpoints or openings. Numeric controls are in the inspector.</span>}</div>}<div className={`editor-layout ${showInspector ? "with-inspector" : ""} ${is3D ? "three-layout" : ""} ${is3D && inspectorCollapsed ? "inspector-collapsed" : ""}`}><div className={`plan-canvas ${tab === "3D View" ? "three-host" : ""}`} role="tabpanel">{!previewUrl && !structure ? <div className="empty-canvas"><span aria-hidden="true">⌗</span><strong>Your floor plan will appear here</strong><p>Use a clear, top-down, single-floor residential plan.</p></div> : tab === "Original" ? previewUrl ? <img src={previewUrl} alt="Uploaded original floor plan" /> : <div className="empty-canvas"><strong>Original preview is unavailable after reload.</strong><p>The saved structural model remains available.</p></div> : tab === "Processed" && result ? <img className="processed-image" src={artifactUrl(result.plan.id, "threshold")} alt="Backend threshold processing result" /> : tab === "Reconstruction" && structure ? <PlanSvg structure={structure} editable={mode === "edit"} selection={selection} onSelect={setSelection} onChange={commit} orientation={designConfiguration?.orientation} design={designConfiguration} /> : tab === "3D View" && structure ? <RendererBoundary onFailure={rendererFailed} onReturnTo2D={() => setTab("Reconstruction")}><ThreeViewer structure={structure} design={designConfiguration ?? undefined} selection={selection} onSelect={setSelection} fullscreen={fullscreen3D} onToggleFullscreen={() => setFullscreen3D((value) => !value)} renderingQuality={systemState?.rendering_quality} available={!rendererUnavailable} onTelemetry={reportRenderer} /></RendererBoundary> : null}</div>{showInspector && structure && <StructureInspector structure={structure} selection={selection} onSelect={setSelection} onChange={commit} editable={mode === "edit" && tab === "Reconstruction"} collapsed={is3D && inspectorCollapsed} onToggle={is3D ? () => setInspectorCollapsed((value) => !value) : undefined} />}</div></>}
+        {section === "Design Studio" && structure && designConfiguration && <div className="design-studio-content"><div className={`editor-layout with-inspector three-layout ${inspectorCollapsed ? "inspector-collapsed" : ""}`}><div className="plan-canvas three-host" role="tabpanel"><RendererBoundary onFailure={rendererFailed} onReturnTo2D={() => { setSection("Structure"); setTab("Reconstruction"); }}><ThreeViewer structure={structure} design={designConfiguration} selection={selection} onSelect={setSelection} fullscreen={fullscreen3D} onToggleFullscreen={() => setFullscreen3D((value) => !value)} renderingQuality={systemState?.rendering_quality} available={!rendererUnavailable} onTelemetry={reportRenderer} /></RendererBoundary></div><StructureInspector structure={structure} selection={selection} onSelect={setSelection} onChange={commit} editable={false} collapsed={inspectorCollapsed} onToggle={() => setInspectorCollapsed((value) => !value)} design={designConfiguration} onDesignChange={updateDesignConfiguration} designMode /></div><RoomAssignments structure={structure} configuration={designConfiguration} selection={selection} onSelect={setSelection} onChange={updateDesignConfiguration} /></div>}
         {section === "Vastu" && structure && activeDesign && designConfiguration && <VastuPanel structure={structure} design={activeDesign} configuration={designConfiguration} analysis={currentAnalysis} busy={designBusy} showZones={showZones} onShowZones={setShowZones} onConfigurationChange={updateDesignConfiguration} onRun={analyze} />}
-        {section === "Compare" && structure && <ComparePanel structure={structure} designs={designs} designAId={compareAId} designBId={compareBId} visualId={compareVisualId} selection={selection} fullscreen={fullscreen3D} renderingQuality={systemState?.rendering_quality} onTelemetry={reportRenderer} onFailure={rendererFailed} onDesignA={(id) => { setCompareAId(id); setCompareVisualId(id); }} onDesignB={setCompareBId} onVisual={setCompareVisualId} onSelect={setSelection} onToggleFullscreen={() => setFullscreen3D((value) => !value)} onReturnTo2D={() => { setSection("Structure"); setTab("Reconstruction"); }} />}
+        {section === "Compare" && structure && <ComparePanel structure={structure} designs={designs} designAId={compareAId} designBId={compareBId} visualId={compareVisualId} selection={selection} fullscreen={fullscreen3D} renderingQuality={systemState?.rendering_quality} rendererAvailable={!rendererUnavailable} onTelemetry={reportRenderer} onFailure={rendererFailed} onDesignA={(id) => { setCompareAId(id); setCompareVisualId(id); }} onDesignB={setCompareBId} onVisual={setCompareVisualId} onSelect={setSelection} onToggleFullscreen={() => setFullscreen3D((value) => !value)} onReturnTo2D={() => { setSection("Structure"); setTab("Reconstruction"); }} />}
         {section === "Control Center" && <ControlCenter state={systemState} metrics={systemMetrics} history={adaptations} error={systemError} rendererUnavailable={rendererUnavailable} onRetryRenderer={retryRenderer} />}
+        {section === "Resilience Lab" && <ResilienceLab status={simulationStatus} system={systemState} history={adaptations} busy={simulationBusy} error={simulationError} onActivate={(scenario) => { void runSimulation(scenario); }} onClear={(scenario) => { void clearScenario(scenario); }} onRestoreAll={() => { void restoreSimulations(); }} />}
         {recoveryMessage && <div className="recovery-message" role="status"><span>{recoveryMessage}</span><button onClick={() => setRecoveryMessage(null)} aria-label="Dismiss recovery message">×</button></div>}
         {section === "Structure" && <><div className="legend"><span><i className="wall-swatch" /> Wall</span><span><i className="room-swatch" /> Room</span><span><i className="opening-swatch" /> Opening</span><span>Low confidence uses a dashed/faded marker.</span></div>{structure?.processing_metadata.warnings.length ? <div className="warnings" aria-label="Detection warnings"><strong>Detection notes</strong>{structure.processing_metadata.warnings.map((warning) => <p key={warning}>{warning}</p>)}</div> : null}</>}
       </div>

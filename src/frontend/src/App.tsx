@@ -13,7 +13,7 @@ function App() {
           <span className="brand-mark" aria-hidden="true">R</span>
           <span>ResilioSpace</span>
         </a>
-        <span className="phase-badge">Day 4 · adaptive prototype</span>
+        <span className="phase-badge">Day 5 · resilient prototype</span>
       </header>
 
       <main id="top">

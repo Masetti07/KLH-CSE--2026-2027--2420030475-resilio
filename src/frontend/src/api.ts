@@ -1,4 +1,4 @@
-import type { AdaptationEvent, Design, DesignConfiguration, Structure, SystemMetrics, SystemState, UploadResult, VastuAnalysis } from "./types";
+import type { AdaptationEvent, Design, DesignConfiguration, SimulationResponse, SimulationScenario, Structure, SystemMetrics, SystemState, UploadResult, VastuAnalysis } from "./types";
 
 export const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
 
@@ -98,4 +98,20 @@ export async function loadSystemStatus(): Promise<{ state: SystemState; metrics:
     jsonResponse<{ items: AdaptationEvent[] }>(await fetch(`${API_BASE}/api/system/adaptations`), "Adaptation history is unavailable."),
   ]);
   return { state, metrics, adaptations: history.items };
+}
+
+export async function loadSimulationStatus(): Promise<SimulationResponse> {
+  return jsonResponse(await fetch(`${API_BASE}/api/simulator/status`), "Simulation status is unavailable.");
+}
+
+export async function activateSimulation(scenario: SimulationScenario): Promise<SimulationResponse> {
+  return jsonResponse(await fetch(`${API_BASE}/api/simulator/scenarios/${scenario}/activate`, { method: "POST" }), "The controlled simulation could not be activated.");
+}
+
+export async function clearSimulation(scenario: SimulationScenario): Promise<SimulationResponse> {
+  return jsonResponse(await fetch(`${API_BASE}/api/simulator/scenarios/${scenario}/clear`, { method: "POST" }), "The controlled simulation could not be cleared.");
+}
+
+export async function restoreAllSimulations(): Promise<SimulationResponse> {
+  return jsonResponse(await fetch(`${API_BASE}/api/simulator/restore`, { method: "POST" }), "The controlled simulations could not be cleared.");
 }

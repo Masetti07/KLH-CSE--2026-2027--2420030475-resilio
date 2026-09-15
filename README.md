@@ -2,7 +2,7 @@
 
 ## Overview
 
-ResilioSpace is a prototype platform for turning clean, top-down 2D residential floor plans into normalized structural representations. Day 4 adds a measured MAPE-K runtime, adaptive Three.js quality, safe 2D fallback, bounded enhanced processing, local validated snapshots, corrupted-state recovery, and an explainable Control Center to the Day 1–3 workflow.
+ResilioSpace is a prototype platform for turning clean, top-down 2D residential floor plans into normalized structural representations. Day 5 adds a safe Resilience Lab, genuine Prometheus instrumentation, production containers, and a three-service Docker Compose stack to the Day 1–4 workflow.
 
 ## Problem Statement
 
@@ -29,18 +29,17 @@ The structural model—not renderer-specific scene objects—is the source of tr
 
 ## Implemented and Planned Features
 
-Day 1–4 implement local processing, correction, visualization, design versions, comparison, orientation, the documented traditional-rule prototype, MAPE-K adaptation, self-healing, autosave, and the Control Center. The following broader capabilities remain planned:
+Day 1–5 implement local processing, correction, visualization, design versions, comparison, orientation, the documented traditional-rule prototype, MAPE-K adaptation, self-healing, autosave, the Control Center, controlled fault simulation, Prometheus metrics, and local containers. The following broader capabilities remain planned:
 
-- Controlled Resilience Lab simulations and restoration.
-- Prometheus metrics and longer-term observability storage.
-- Docker, Docker Compose, GitHub Actions, Trivy, and automated tests.
+- Longer-term observability dashboards and retention policy work.
+- GitHub Actions, Trivy, cloud deployment, and final experiments.
 
 ## Planned Technology Stack
 
-- Frontend: React, Vite, Three.js, `@react-three/fiber`, `@react-three/drei`, and Recharts.
-- Backend: Python 3.12+, FastAPI, OpenCV, NumPy, Pillow, SQLAlchemy, SQLite, and pytest.
+- Frontend: React, Vite, Three.js, `@react-three/fiber`, and `@react-three/drei`.
+- Backend: Python 3.12+, FastAPI, OpenCV, NumPy, Pillow, SQLAlchemy, SQLite, `prometheus_client`, and pytest.
 - Adaptive engine: Python implementation of a MAPE-K-inspired architecture.
-- DevOps and observability: Git, GitHub, Docker, Docker Compose, Prometheus, GitHub Actions, and Trivy.
+- DevOps and observability: Git, Docker, Docker Compose, and Prometheus. CI and security scanning remain planned.
 
 The project will use free and open-source components and will not require paid APIs, commercial CAD services, cloud platforms, or an external database.
 
@@ -89,9 +88,9 @@ Roadmap entries describe intent, not completed functionality.
 
 ## Current Status
 
-**Day 4 - MAPE-K Adaptation and Self-Healing**
+**Day 5 - Resilience, Observability and Containerization**
 
-Implemented functionality includes the Day 1–3 processing, correction, 3D viewer, Design Studio, versions, comparison, room semantics, orientation, and Traditional Vastu Rule Analysis plus measured MAPE-K modes, real render-quality reduction, 2D renderer fallback, bounded enhanced preprocessing, versioned working snapshots, previous-valid-snapshot restoration, stability-gated recovery, system APIs, and an explainable Control Center. See [docs/architecture/mape-k.md](docs/architecture/mape-k.md), [docs/architecture/self-healing.md](docs/architecture/self-healing.md), and [docs/testing/day-4.md](docs/testing/day-4.md).
+Implemented functionality includes the prior processing, correction, 2D/3D/design/Vastu/compare workflow plus measured MAPE-K modes, real render-quality reduction, 2D fallback, bounded retries, validated snapshots, stability-gated recovery, an explainable Control Center, five reversible Resilience Lab simulations, Prometheus metrics, and local production containers. See [Resilience Lab](docs/architecture/resilience-lab.md), [observability](docs/architecture/observability.md), [Docker](docs/architecture/docker.md), and [Day 5 testing](docs/testing/day-5.md).
 
 ## Local Development
 
@@ -115,6 +114,18 @@ npm run dev
 ```
 
 Open `http://127.0.0.1:5173`. The API runs at `http://127.0.0.1:8000`, and its interactive documentation is at `http://127.0.0.1:8000/docs`.
+
+## Docker Compose
+
+With Docker Desktop running:
+
+```powershell
+docker compose config
+docker compose build
+docker compose up -d
+```
+
+Open the frontend at `http://localhost:8080`, the backend at `http://localhost:8000`, and Prometheus at `http://localhost:9090`. Stop the stack with `docker compose down`. The backend runtime, including prototype SQLite state and uploaded sources, is stored in a named volume.
 
 ## Limitations
 

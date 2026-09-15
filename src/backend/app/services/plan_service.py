@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.adaptation import engine as adaptation_engine
+from app.observability import observe_processing
+from app.simulator import SimulationScenario
 from app.models.plan_record import PlanRecord
 from app.processing.pipeline import process_floor_plan
 from app.schemas.plan import Dimensions, PlanDetail, StructuralPlan, UploadResult
@@ -24,6 +26,10 @@ class UploadValidationError(ValueError):
 
 
 class PlanNotFoundError(LookupError):
+    pass
+
+
+class ControlledProcessingFailure(RuntimeError):
     pass
 
 
@@ -56,15 +62,24 @@ class PlanService:
             adaptation_engine.knowledge.enhanced_retry_count = 0
             started = perf_counter()
             used_enhanced_retry = False
+            if adaptation_engine.simulator.is_active(SimulationScenario.PROCESSING_FAILURE):
+                duration = perf_counter() - started
+                adaptation_engine.monitor.record_processing(duration * 1000, failed=True)
+                observe_processing(duration, success=False)
+                adaptation_engine.evaluate()
+                raise ControlledProcessingFailure("A controlled processing failure is active. The selected source plan is preserved; clear the simulation and try again.")
             try:
                 structure = process_floor_plan(image, plan_id, settings.debug_dir / plan_id)
             except Exception:
-                adaptation_engine.monitor.record_processing((perf_counter() - started) * 1000, failed=True)
+                duration = perf_counter() - started
+                adaptation_engine.monitor.record_processing(duration * 1000, failed=True)
+                observe_processing(duration, success=False)
                 adaptation_engine.evaluate()
                 structure = process_floor_plan(image, plan_id, settings.debug_dir / plan_id, enhanced=True)
                 used_enhanced_retry = True
                 adaptation_engine.knowledge.enhanced_retry_count = 1
             adaptation_engine.monitor.record_processing((perf_counter() - started) * 1000, structure.overall_confidence)
+            observe_processing(perf_counter() - started, success=True, confidence=structure.overall_confidence)
             _, _, decision, _ = adaptation_engine.evaluate()
             if decision.strategy.value == "RETRY_ENHANCED_PREPROCESSING" and not used_enhanced_retry:
                 enhanced = process_floor_plan(image, plan_id, settings.debug_dir / plan_id, enhanced=True)
@@ -75,8 +90,12 @@ class PlanService:
             record = PlanRecord(id=plan_id, original_name=Path(file.filename or "upload").name[:255], media_type="image/png" if image_format == "PNG" else "image/jpeg", size_bytes=len(content), storage_path=str(storage_path), structure=structure.model_dump(mode="json"))
             self.session.add(record)
             self.session.commit()
+        except ControlledProcessingFailure:
+            storage_path.unlink(missing_ok=True)
+            raise
         except Exception:
             adaptation_engine.monitor.record_processing((perf_counter() - started) * 1000, failed=True)
+            observe_processing(perf_counter() - started, success=False)
             adaptation_engine.evaluate()
             storage_path.unlink(missing_ok=True)
             raise

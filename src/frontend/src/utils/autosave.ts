@@ -41,3 +41,12 @@ export function writeWorkingSnapshot(snapshot: WorkingSnapshot, storage: Pick<St
   const history = Array.isArray(existing) ? existing.filter(validWorkingSnapshot) : [];
   storage.setItem(snapshotKey(snapshot.metadata.plan_id), JSON.stringify([snapshot, ...history].slice(0, SNAPSHOT_LIMIT)));
 }
+
+export function injectCorruptedNewestSnapshot(planId: string, storage: Pick<Storage, "getItem" | "setItem"> = localStorage): ReturnType<typeof readSnapshotHistory> {
+  let existing: unknown = [];
+  try { existing = JSON.parse(storage.getItem(snapshotKey(planId)) ?? "[]"); } catch { existing = []; }
+  const valid = Array.isArray(existing) ? existing.filter(validWorkingSnapshot) : [];
+  const invalidNewest = { schema_version: SNAPSHOT_VERSION, metadata: { created_at: new Date().toISOString(), plan_id: planId }, payload: { deliberately_invalid_simulation: true } };
+  storage.setItem(snapshotKey(planId), JSON.stringify([invalidNewest, ...valid].slice(0, SNAPSHOT_LIMIT)));
+  return readSnapshotHistory(planId, storage);
+}

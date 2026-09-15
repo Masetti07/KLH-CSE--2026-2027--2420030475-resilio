@@ -13,6 +13,7 @@ from app.schemas.design import (
 )
 from app.schemas.plan import StructuralPlan
 from app.services.vastu import analyze_design
+from app.observability import VASTU_ANALYSES
 
 
 class DesignNotFoundError(LookupError):
@@ -82,6 +83,7 @@ class DesignService:
         structure = StructuralPlan.model_validate(self._plan(record.plan_id).structure)
         configuration = DesignConfiguration.model_validate(record.configuration)
         analysis = analyze_design(record.id, configuration, structure)
+        VASTU_ANALYSES.inc()
         record.latest_analysis = analysis.model_dump(mode="json")
         record.updated_at = datetime.now(timezone.utc)
         self.session.commit()

@@ -6,6 +6,7 @@ import { PerspectiveCamera } from "three";
 import type { DesignConfiguration, Selection, Structure } from "../types";
 import { orientationArrow, structureWithEffectiveWallHeight } from "../utils/designState";
 import { cameraFrame, modelBounds, normalizedToWorld, openingTransform, wallAngle, wallLength, wallMidpoint, wallThickness, type ModelBounds } from "../utils/geometry";
+import { rendererSettings } from "../utils/rendererQuality";
 import ProceduralMaterial from "./ProceduralMaterial";
 
 type CameraCommand = { name: "reset" | "top" | "perspective"; sequence: number };
@@ -32,11 +33,11 @@ function TelemetryProbe({ onTelemetry }: { onTelemetry?: (fps: number, frameTime
   return null;
 }
 
-function Scene({ structure, design, selection, onSelect, command, bounds, performance, onTelemetry }: { structure: Structure; design?: DesignConfiguration; selection: Selection; onSelect: (selection: Selection) => void; command: CameraCommand; bounds: ModelBounds; performance: boolean; onTelemetry?: (fps: number, frameTime: number) => void }) {
+function Scene({ structure, design, selection, onSelect, command, bounds, performance, shadowMapSize, onTelemetry }: { structure: Structure; design?: DesignConfiguration; selection: Selection; onSelect: (selection: Selection) => void; command: CameraCommand; bounds: ModelBounds; performance: boolean; shadowMapSize: number; onTelemetry?: (fps: number, frameTime: number) => void }) {
   const gridSize = Math.max(bounds.width, bounds.depth) * 1.45;
   return <>
     <hemisphereLight color="#fffdf7" groundColor="#68756e" intensity={1.45} />
-    <directionalLight position={[bounds.center.x + gridSize * .55, bounds.maxY + gridSize, bounds.center.z + gridSize * .4]} intensity={1.8} castShadow={!performance} shadow-mapSize-width={performance ? 256 : 1024} shadow-mapSize-height={performance ? 256 : 1024} />
+    <directionalLight position={[bounds.center.x + gridSize * .55, bounds.maxY + gridSize, bounds.center.z + gridSize * .4]} intensity={1.8} castShadow={!performance} shadow-mapSize-width={shadowMapSize} shadow-mapSize-height={shadowMapSize} />
     <mesh position={[bounds.center.x, -0.045, bounds.center.z]} receiveShadow={!performance} onClick={(event) => { event.stopPropagation(); onSelect({ kind: "floor", id: structure.id }); }}>
       <boxGeometry args={[bounds.width, 0.09, bounds.depth]} /><meshStandardMaterial color={selection?.kind === "floor" ? "#d8b782" : "#e8e1d4"} roughness={.94} />
     </mesh>
@@ -77,16 +78,18 @@ function Scene({ structure, design, selection, onSelect, command, bounds, perfor
   </>;
 }
 
-type Props = { structure: Structure; design?: DesignConfiguration; selection: Selection; onSelect: (selection: Selection) => void; fullscreen: boolean; onToggleFullscreen: () => void; renderingQuality?: "NORMAL" | "PERFORMANCE"; onTelemetry?: (fps: number, frameTime: number) => void };
+type Props = { structure: Structure; design?: DesignConfiguration; selection: Selection; onSelect: (selection: Selection) => void; fullscreen: boolean; onToggleFullscreen: () => void; renderingQuality?: "NORMAL" | "PERFORMANCE"; available?: boolean; onTelemetry?: (fps: number, frameTime: number) => void };
 
-export default function ThreeViewer({ structure, design, selection, onSelect, fullscreen, onToggleFullscreen, renderingQuality = "NORMAL", onTelemetry }: Props) {
+export default function ThreeViewer({ structure, design, selection, onSelect, fullscreen, onToggleFullscreen, renderingQuality = "NORMAL", available = true, onTelemetry }: Props) {
   const [command, setCommand] = useState<CameraCommand>({ name: "perspective", sequence: 0 });
   const renderStructure = useMemo(() => structureWithEffectiveWallHeight(structure, design), [design, structure]);
   const bounds = useMemo(() => modelBounds(renderStructure), [renderStructure]);
+  const settings = rendererSettings(renderingQuality);
   const issue = (name: CameraCommand["name"]) => setCommand((current) => ({ name, sequence: current.sequence + 1 }));
+  if (!available) return <div className="renderer-fallback" role="status"><strong>3D rendering is temporarily unavailable.</strong><p>Your design is preserved and the 2D workspace remains available.</p></div>;
   return <div className="three-viewer">
     <div className="viewer-toolbar"><span>Approximate normalized geometry {design?.orientation !== null && design?.orientation !== undefined ? `· North ${orientationArrow(design.orientation)}` : ""}</span><div className="viewer-actions"><button onClick={() => issue("reset")}>Reset</button><button onClick={() => issue("top")}>Top</button><button onClick={() => issue("perspective")}>3D / Perspective</button><button className="fullscreen-button" aria-pressed={fullscreen} onClick={onToggleFullscreen}>{fullscreen ? "Exit fullscreen" : "Fullscreen 3D"}</button></div></div>
-    <div className="three-canvas"><Canvas shadows={renderingQuality === "NORMAL"} dpr={renderingQuality === "PERFORMANCE" ? 1 : [1, 1.75]} camera={{ position: [8, 8, 8], fov: 42, near: .05, far: 150 }}><Scene structure={renderStructure} design={design} selection={selection} onSelect={onSelect} command={command} bounds={bounds} performance={renderingQuality === "PERFORMANCE"} onTelemetry={onTelemetry} /></Canvas></div>
+    <div className="three-canvas"><Canvas shadows={settings.shadows} dpr={settings.dpr} camera={{ position: [8, 8, 8], fov: 42, near: .05, far: 150 }}><Scene structure={renderStructure} design={design} selection={selection} onSelect={onSelect} command={command} bounds={bounds} performance={renderingQuality === "PERFORMANCE"} shadowMapSize={settings.shadowMapSize} onTelemetry={onTelemetry} /></Canvas></div>
     <div className="viewport-help" aria-label="3D navigation help"><span>Left drag: Orbit</span><span>Right drag: Pan</span><span>Scroll: Zoom</span></div>
   </div>;
 }

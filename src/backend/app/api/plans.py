@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database.session import get_session
 from app.schemas.plan import PlanDetail, StructuralPlan, UploadResult
-from app.services.plan_service import PlanNotFoundError, PlanService, UploadValidationError
+from app.services.plan_service import ControlledProcessingFailure, PlanNotFoundError, PlanService, UploadValidationError
 
 
 router = APIRouter(prefix="/api/plans", tags=["plans"])
@@ -22,6 +22,8 @@ async def upload_plan(file: UploadFile = File(...), plan_service: PlanService = 
         return await plan_service.upload(file)
     except UploadValidationError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except ControlledProcessingFailure as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/{plan_id}", response_model=PlanDetail)

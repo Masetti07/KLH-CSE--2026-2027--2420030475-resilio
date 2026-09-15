@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.adaptation import engine
+from app.observability import RENDERER_FPS, RENDERER_TELEMETRY
 
 
 router = APIRouter(prefix="/api/system", tags=["system"])
@@ -68,6 +69,10 @@ def system_adaptations() -> dict:
 
 @router.post("/telemetry")
 def telemetry(payload: TelemetryPayload) -> dict:
+    if payload.fps is not None or payload.frame_time_ms is not None or payload.renderer_health is not None:
+        RENDERER_TELEMETRY.inc()
+    if payload.fps is not None:
+        RENDERER_FPS.set(payload.fps)
     engine.monitor.record_telemetry(
         fps=payload.fps, frame_time_ms=payload.frame_time_ms,
         renderer_health=payload.renderer_health, autosave_health=payload.autosave_health,

@@ -48,6 +48,7 @@ class Observation:
     processing_health: str = "HEALTHY"
     autosave_health: str = "UNKNOWN"
     session_corrupted: bool = False
+    simulated_conditions: list[str] = field(default_factory=list)
 
     @property
     def api_error_rate(self) -> float:

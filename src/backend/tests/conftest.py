@@ -11,14 +11,17 @@ os.environ["RESILIOSPACE_RUNTIME_DIR"] = str(TEST_RUNTIME)
 from app.database.base import Base  # noqa: E402
 from app.database.session import engine  # noqa: E402
 from app.main import app  # noqa: E402
+from app.adaptation import engine as adaptation_engine  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def clean_database():
+    adaptation_engine.reset()
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield
+    adaptation_engine.reset()
     Base.metadata.drop_all(bind=engine)
 
 

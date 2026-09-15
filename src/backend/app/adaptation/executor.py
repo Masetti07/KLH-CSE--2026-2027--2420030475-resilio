@@ -24,8 +24,9 @@ class Executor:
             knowledge.recovery_progress = 0
 
         knowledge.mode = decision.target_mode
-        knowledge.active_condition = analysis.condition if decision.target_mode != AdaptiveMode.NORMAL else RuntimeCondition.HEALTHY
-        knowledge.active_strategy = decision.strategy if decision.target_mode != AdaptiveMode.NORMAL else None
+        returned_normal = decision.strategy == Strategy.RETURN_NORMAL
+        knowledge.active_condition = RuntimeCondition.HEALTHY if returned_normal else analysis.condition
+        knowledge.active_strategy = None if returned_normal else decision.strategy
         changed = previous != knowledge.mode or previous_condition != knowledge.active_condition or previous_strategy != knowledge.active_strategy or strategy == Strategy.CONTROLLED_RECOVERY
         if not changed and analysis.condition == RuntimeCondition.HEALTHY:
             return None
