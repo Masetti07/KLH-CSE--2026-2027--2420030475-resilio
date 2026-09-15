@@ -1,0 +1,63 @@
+export type Point = { x: number; y: number };
+export type Wall = {
+  id: string;
+  start_x: number;
+  start_y: number;
+  end_x: number;
+  end_y: number;
+  thickness: number;
+  confidence: number;
+};
+export type RoomType = "living_room" | "kitchen" | "master_bedroom" | "bedroom" | "bathroom" | "dining" | "study" | "pooja_room" | "entrance" | "utility" | "other";
+export type Room = { id: string; polygon: Point[]; name: string | null; type: RoomType | null; confidence: number };
+export type Opening = {
+  id: string;
+  wall_id: string | null;
+  position: Point;
+  width: number;
+  probable_type: "door" | "window" | "unknown";
+  confidence: number;
+};
+export type Structure = {
+  id: string;
+  source_dimensions: { width: number; height: number };
+  normalized_dimensions: { width: number; height: number };
+  overall_confidence: number;
+  processing_metadata: { pipeline_version: string; stages: string[]; warnings: string[]; debug_images: Record<string, string> };
+  editing_metadata: { revision: number; modified_by: "automatic" | "manual"; last_saved_at: string | null };
+  wall_height: number;
+  walls: Wall[];
+  rooms: Room[];
+  openings: Opening[];
+};
+export type Selection = { kind: "wall" | "room" | "opening" | "floor"; id: string } | null;
+export type UploadResult = {
+  plan: { id: string; original_name: string; media_type: string; size_bytes: number; status: string; overall_confidence: number };
+  structure: Structure;
+};
+export type Orientation = 0 | 90 | 180 | 270;
+export type WallFinish = "paint" | "wood_panel" | "brick_style" | "concrete_style";
+export type FloorFinish = "wood" | "tile" | "marble_style" | "concrete" | "neutral";
+export type WallAppearance = { color: string; finish: WallFinish };
+export type FloorAppearance = { color: string; finish: FloorFinish };
+export type DoorConfiguration = { color: string; width: number; style: "standard" | "sliding" | "double" };
+export type WindowConfiguration = { color: string; width: number; height: number; style: "standard" | "wide" | "floor_to_ceiling" };
+export type RoomSemantic = { name: string | null; room_type: RoomType | null };
+export type DesignConfiguration = {
+  wall_height: number;
+  wall_appearances: Record<string, WallAppearance>;
+  floor_appearances: Record<string, FloorAppearance>;
+  door_configurations: Record<string, DoorConfiguration>;
+  window_configurations: Record<string, WindowConfiguration>;
+  room_semantics: Record<string, RoomSemantic>;
+  orientation: Orientation | null;
+};
+export type VastuStatus = "satisfied" | "unsatisfied" | "not_applicable" | "cannot_evaluate";
+export type DirectionalZone = "north" | "north_east" | "east" | "south_east" | "south" | "south_west" | "west" | "north_west" | "center";
+export type VastuRuleResult = { rule_id: string; rule_title: string; room_id: string | null; room_name: string | null; room_type: RoomType; detected_zone: DirectionalZone | null; preferred_zones: DirectionalZone[]; result: VastuStatus; severity: "info" | "advisory"; explanation: string };
+export type VastuAnalysis = { design_id: string; orientation: Orientation | null; score: number | null; score_label: string; counts: Record<VastuStatus, number>; rule_results: VastuRuleResult[]; warnings: string[]; analyzed_at: string; analysis_version: string };
+export type Design = { id: string; plan_id: string; name: string; configuration: DesignConfiguration; latest_analysis: VastuAnalysis | null; created_at: string; updated_at: string };
+export type AdaptiveMode = "NORMAL" | "PERFORMANCE" | "DEGRADED" | "RECOVERY";
+export type SystemState = { overall: string; backend: string; processor: string; renderer: string; autosave: string; adaptive_mode: AdaptiveMode; active_condition: string; active_strategy: string | null; recovery_progress: number; recovery_required: number; rendering_quality: "NORMAL" | "PERFORMANCE"; use_2d_fallback: boolean };
+export type SystemMetrics = { reconstruction_confidence: number | null; processing_duration_ms: number | null; api_latency_ms: number | null; api_request_count: number; api_error_count: number; api_error_rate: number; renderer_fps: number | null; renderer_frame_time_ms: number | null; renderer_health: string; processing_health: string; autosave_health: string };
+export type AdaptationEvent = { timestamp: string; condition: string; observed_metrics: Record<string, unknown>; threshold_or_trigger: string; previous_mode: AdaptiveMode; selected_strategy: string; new_mode: AdaptiveMode; outcome: string; post_adaptation_metrics: Record<string, unknown> | null; explanation: string };

@@ -1,0 +1,47 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Frontend dependencies and builds
+node_modules/
+dist/
+
+# Python caches and environments
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Runtime uploads and temporary processing artifacts
+uploads/
+runtime/uploads/
+runtime/debug/
+src/backend/runtime/
+src/backend/tests/.runtime/
+runtime/tmp/
+tmp/
+temp/
+*.tmp
+
+# Coverage and logs
+.coverage
+htmlcov/
+coverage/
+*.log
+
+# IDE and OS files
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+Desktop.ini
