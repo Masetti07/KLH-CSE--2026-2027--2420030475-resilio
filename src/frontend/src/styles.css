@@ -94,6 +94,7 @@ h1 { margin-bottom: 28px; font-size: clamp(46px, 6vw, 82px); letter-spacing: -.0
 .studio-tabs { display: flex; gap: 7px; margin-bottom: 12px; padding: 5px; border: 1px solid #d5ddd7; border-radius: 11px; background: #eef1ec; }
 .studio-tabs button { flex: 1; min-height: 42px; border: 0; border-radius: 8px; color: #52665e; background: transparent; font-weight: 800; }
 .studio-tabs button[aria-selected="true"] { color: #fff; background: #1d4b3c; box-shadow: 0 4px 12px rgba(29,75,60,.17); }
+.studio-tabs button:disabled { opacity: .42; cursor: not-allowed; box-shadow: none; }
 .design-manager { display: grid; gap: 14px; margin-top: 24px; padding-top: 22px; border-top: 1px solid #d3dbd5; }
 .design-manager-heading { display: grid; gap: 3px; }.design-manager-heading h3 { margin: 0; }.saved-label, .unsaved-label { font-size: 12px; font-weight: 800; }.saved-label { color: #16815f; }.unsaved-label { color: #ad5b21; }
 .design-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }.design-actions button { min-height: 40px; border: 1px solid #c8d2cb; border-radius: 8px; color: #234b3d; background: #fff; font-weight: 700; }.design-actions button:disabled { opacity: .4; cursor: not-allowed; }

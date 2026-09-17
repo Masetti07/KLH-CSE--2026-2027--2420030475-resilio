@@ -36,3 +36,9 @@ The scenario tests assert real MAPE-K history and state transitions. Frontend te
 7. Open Control Center and confirm its state/history matches the Lab. Open `/metrics` and query `up{job="resiliospace-backend"}` in Prometheus; it should be `1`.
 
 The prototype supports only the documented V1 input scope. Browser/WebGL behavior still requires a manual check because unit tests do not emulate a real GPU context.
+
+## Manual-browser processing-failure fix
+
+Manual Docker browser validation found that choosing a replacement source correctly discarded the previous reconstruction, but the workspace section navigation was also hidden because it was conditional on a valid structure. After the controlled processing failure, this made Resilience Lab unreachable even though the replacement source and active simulation were correctly preserved.
+
+The navigation is now independent of reconstruction success. Structure, Control Center, and Resilience Lab remain available during empty, processing, and error states. Design Studio, Vastu, and Compare stay visible but disabled until a valid structural reconstruction exists. This preserves stale-state protection while allowing the user to inspect the real `PROCESSING_FAILURE → RETRY_PROCESSING` event, explicitly clear the simulation in Resilience Lab, return to Structure, and retry the same selected source.
