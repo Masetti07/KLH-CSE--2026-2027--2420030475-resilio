@@ -1,5 +1,5 @@
 # Experiments
 
-Future experiments will evaluate reconstruction behavior, rendering performance, adaptive mode transitions, graceful degradation, and recovery using controlled, reproducible inputs. The planned Resilience Lab will support simulations such as low FPS, renderer failure, processing failure, low confidence, and autosave corruption, followed by explicit restoration.
+Day 6's [reproducible experiments](day-6-experiments.md) evaluate adaptive mode transitions, graceful degradation, and recovery using controlled inputs against the real MAPE-K and snapshot code. The Resilience Lab supplies reversible fault signals, not destructive system failures or physical GPU benchmarks.
 
-Every experiment must record its purpose, environment, software revision, configuration, input provenance, procedure, raw output location, and limitations. Metrics, accuracy, confidence, performance, security, and recovery claims must come from actual execution. Phase 0 contains no experiment results.
+Every experiment must record its purpose, environment, software revision, configuration, input provenance, procedure, raw output location, and limitations. Metrics, accuracy, confidence, performance, security, and recovery claims must come from actual execution. Generated Day 6 output is in `results/experiments/`.

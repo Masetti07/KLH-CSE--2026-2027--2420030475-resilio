@@ -1,0 +1,31 @@
+{
+  "experiment": "E - Recovery stability and hysteresis",
+  "timestamp": "2026-09-19T09:08:14.259285+00:00",
+  "initial_mode": "NORMAL",
+  "injected_fault": "low_fps",
+  "adapted_mode": "PERFORMANCE",
+  "mode_immediately_after_fault_removal": "RECOVERY",
+  "healthy_observations": [
+    {
+      "healthy_observation": 1,
+      "mode": "RECOVERY",
+      "recovery_progress": 1,
+      "rendering_quality": "PERFORMANCE"
+    },
+    {
+      "healthy_observation": 2,
+      "mode": "RECOVERY",
+      "recovery_progress": 2,
+      "rendering_quality": "PERFORMANCE"
+    },
+    {
+      "healthy_observation": 3,
+      "mode": "NORMAL",
+      "recovery_progress": 3,
+      "rendering_quality": "NORMAL"
+    }
+  ],
+  "required_consecutive_healthy_observations": 3,
+  "final_mode": "NORMAL",
+  "passed": true
+}

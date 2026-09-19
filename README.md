@@ -2,7 +2,7 @@
 
 ## Overview
 
-ResilioSpace is a prototype platform for turning clean, top-down 2D residential floor plans into normalized structural representations. Day 5 adds a safe Resilience Lab, genuine Prometheus instrumentation, production containers, and a three-service Docker Compose stack to the Day 1–4 workflow.
+ResilioSpace is a prototype platform for turning clean, top-down 2D residential floor plans into normalized structural representations. Day 6 adds continuous integration, security scanning, a focused security review, and reproducible adaptation experiments to the Day 1–5 workflow.
 
 ## Problem Statement
 
@@ -29,17 +29,17 @@ The structural model—not renderer-specific scene objects—is the source of tr
 
 ## Implemented and Planned Features
 
-Day 1–5 implement local processing, correction, visualization, design versions, comparison, orientation, the documented traditional-rule prototype, MAPE-K adaptation, self-healing, autosave, the Control Center, controlled fault simulation, Prometheus metrics, and local containers. The following broader capabilities remain planned:
+Day 1–6 implement local processing, correction, visualization, design versions, comparison, orientation, the documented traditional-rule prototype, MAPE-K adaptation, self-healing, autosave, the Control Center, controlled fault simulation, Prometheus metrics, local containers, CI validation, and reproducible experiments. The following broader capabilities remain planned:
 
 - Longer-term observability dashboards and retention policy work.
-- GitHub Actions, Trivy, cloud deployment, and final experiments.
+- Production deployment and broader performance/security evaluation.
 
 ## Planned Technology Stack
 
 - Frontend: React, Vite, Three.js, `@react-three/fiber`, and `@react-three/drei`.
 - Backend: Python 3.12+, FastAPI, OpenCV, NumPy, Pillow, SQLAlchemy, SQLite, `prometheus_client`, and pytest.
 - Adaptive engine: Python implementation of a MAPE-K-inspired architecture.
-- DevOps and observability: Git, Docker, Docker Compose, and Prometheus. CI and security scanning remain planned.
+- DevOps and observability: Git, Docker, Docker Compose, Prometheus, GitHub Actions, and Trivy.
 
 The project will use free and open-source components and will not require paid APIs, commercial CAD services, cloud platforms, or an external database.
 
@@ -88,9 +88,9 @@ Roadmap entries describe intent, not completed functionality.
 
 ## Current Status
 
-**Day 5 - Resilience, Observability and Containerization**
+**Day 6 - CI/CD, Security and Reproducible Experiments**
 
-Implemented functionality includes the prior processing, correction, 2D/3D/design/Vastu/compare workflow plus measured MAPE-K modes, real render-quality reduction, 2D fallback, bounded retries, validated snapshots, stability-gated recovery, an explainable Control Center, five reversible Resilience Lab simulations, Prometheus metrics, and local production containers. See [Resilience Lab](docs/architecture/resilience-lab.md), [observability](docs/architecture/observability.md), [Docker](docs/architecture/docker.md), and [Day 5 testing](docs/testing/day-5.md).
+Implemented functionality includes the prior processing, correction, 2D/3D/design/Vastu/compare workflow plus measured MAPE-K modes, render-quality reduction, 2D fallback, bounded retries, validated snapshots, stability-gated recovery, an explainable Control Center, five reversible Resilience Lab simulations, Prometheus metrics, local containers, CI validation, and generated experiment evidence. CI validates container-ready delivery; deployment remains manual/local. See [Day 6 CI](docs/architecture/ci-cd.md), [experiments](docs/experiments/day-6-experiments.md), [security review](docs/security/security-review.md), and [Day 6 testing](docs/testing/day-6.md).
 
 ## Local Development
 

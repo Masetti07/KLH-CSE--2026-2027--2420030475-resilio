@@ -1,0 +1,37 @@
+{
+  "experiment": "B - Renderer failure self-healing",
+  "timestamp": "2026-09-19T09:08:14.259285+00:00",
+  "starting_mode": "NORMAL",
+  "injected_condition": "renderer_health=FAILED",
+  "condition": "RENDERER_FAILURE",
+  "strategy": "USE_2D_FALLBACK",
+  "adapted_mode": "DEGRADED",
+  "three_d_disable_requested": true,
+  "three_d_unmounted_observed": null,
+  "two_d_ui_available_observed": null,
+  "two_d_structural_data_available": true,
+  "browser_validation": "MANUAL VALIDATION REQUIRED: actual canvas unmount and 2D interaction",
+  "model_and_design_state_preserved": true,
+  "recovery_observations": [
+    {
+      "healthy_observation": 1,
+      "mode": "RECOVERY",
+      "recovery_progress": 1,
+      "rendering_quality": "PERFORMANCE"
+    },
+    {
+      "healthy_observation": 2,
+      "mode": "RECOVERY",
+      "recovery_progress": 2,
+      "rendering_quality": "PERFORMANCE"
+    },
+    {
+      "healthy_observation": 3,
+      "mode": "NORMAL",
+      "recovery_progress": 3,
+      "rendering_quality": "NORMAL"
+    }
+  ],
+  "final_mode": "NORMAL",
+  "passed": true
+}

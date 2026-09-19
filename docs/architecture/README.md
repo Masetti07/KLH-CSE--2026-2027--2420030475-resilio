@@ -1,6 +1,6 @@
 # Architecture
 
-This index covers the implemented Day 1–4 prototype and distinguishes later planned systems.
+This index covers the implemented prototype and distinguishes later planned systems.
 
 ## Source of truth
 
@@ -50,3 +50,6 @@ Implemented architecture notes:
 - [Day 3 design comparison](design-comparison.md)
 - [Day 4 MAPE-K adaptation](mape-k.md)
 - [Day 4 self-healing and snapshots](self-healing.md)
+- [Day 5 Docker architecture](docker.md)
+- [Day 5 observability](observability.md)
+- [Day 6 CI and container-ready delivery](ci-cd.md)

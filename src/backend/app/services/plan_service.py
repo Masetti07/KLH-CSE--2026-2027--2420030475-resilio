@@ -153,6 +153,8 @@ class PlanService:
             with Image.open(io.BytesIO(content)) as image:
                 image_format = image.format or ""
                 width, height = image.size
+        except Image.DecompressionBombError as exc:
+            raise UploadValidationError("The image dimensions exceed the safe decoding limit.", 413) from exc
         except (UnidentifiedImageError, OSError, ValueError) as exc:
             raise UploadValidationError("The uploaded file is not a valid image.") from exc
 

@@ -6,7 +6,7 @@ Day 5 defines exactly three Compose services:
 - `backend`: the FastAPI application served by Uvicorn. `/app/runtime` is a named volume for the prototype SQLite database, uploaded sources, and generated processing artifacts.
 - `prometheus`: Prometheus with the repository configuration mounted read-only and its data in a named volume.
 
-The browser makes same-origin `/api` requests through nginx, so no machine-specific container address is exposed to browser code. Host ports default to 8080, 8000, and 9090 and can be changed with the non-secret values documented in `.env.example`. Service healthchecks cover nginx, FastAPI, and Prometheus; dependent services wait for the backend healthcheck.
+The browser makes same-origin `/api` requests through nginx, so no machine-specific container address is exposed to browser code. Host ports default to 8080, 8000, and 9090, are bound to loopback, and can be changed with the non-secret values documented in `.env.example`. The frontend runs unprivileged and listens on container port 8080. The backend drops capabilities and uses no-new-privileges, but retains its original container user to preserve existing root-owned named-volume data; migration to a non-root backend would require a separate tested ownership plan. Service healthchecks cover nginx, FastAPI, and Prometheus; dependent services wait for the backend healthcheck.
 
 ## Commands
 

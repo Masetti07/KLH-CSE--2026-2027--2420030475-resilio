@@ -17,6 +17,9 @@ def test_health_endpoint(client):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "no-referrer"
 
 
 def test_valid_png_upload_and_retrieval(client):
@@ -52,3 +55,34 @@ def test_malformed_image_is_rejected(client):
 def test_content_must_match_extension(client):
     response = client.post("/api/plans/upload", files={"file": ("plan.png", image_bytes("JPEG"), "image/png")})
     assert response.status_code == 400
+
+
+def test_decompression_bomb_returns_safe_413(client, monkeypatch):
+    def reject(*args, **kwargs):
+        raise Image.DecompressionBombError("internal decoder detail")
+    payload = image_bytes("PNG")
+    monkeypatch.setattr(Image, "open", reject)
+    response = client.post("/api/plans/upload", files={"file": ("huge.png", payload, "image/png")})
+    assert response.status_code == 413
+    assert "internal decoder detail" not in response.text
+
+
+def test_upload_size_limit(client):
+    from app.config import settings
+    response = client.post("/api/plans/upload", files={"file": ("large.png", b"x" * (settings.max_upload_bytes + 1), "image/png")})
+    assert response.status_code == 413
+
+
+def test_untrusted_origin_has_no_cors_permission(client):
+    response = client.get("/health", headers={"Origin": "https://untrusted.example"})
+    assert "access-control-allow-origin" not in response.headers
+    response = client.get("/health", headers={"Origin": "http://localhost:5173"})
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
+def test_artifact_allowlist_and_path_identifiers(client):
+    uploaded = client.post("/api/plans/upload", files={"file": ("../../plan.png", image_bytes("PNG"), "image/png")})
+    assert uploaded.status_code == 201
+    plan_id = uploaded.json()["plan"]["id"]
+    assert client.get(f"/api/plans/{plan_id}/artifacts/secrets").status_code == 400
+    assert client.get("/api/plans/not-a-uuid").status_code == 422

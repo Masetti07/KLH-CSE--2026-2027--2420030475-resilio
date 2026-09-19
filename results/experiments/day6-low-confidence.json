@@ -1,0 +1,18 @@
+{
+  "experiment": "C - Low reconstruction confidence",
+  "timestamp": "2026-09-19T09:08:14.259285+00:00",
+  "genuine_reconstruction_confidence": null,
+  "controlled_baseline_confidence": 0.72,
+  "controlled_injected_confidence": 0.35000000000000003,
+  "configured_confidence_threshold": 0.55,
+  "condition": "LOW_RECONSTRUCTION_CONFIDENCE",
+  "first_strategy": "RETRY_ENHANCED_PREPROCESSING",
+  "enhanced_retry_decision_count": 1,
+  "actual_image_preprocessing_attempts": 0,
+  "genuinely_recalculated_confidence": null,
+  "recalculation_note": "No image was reprocessed in this bounded policy experiment; no improved confidence is claimed.",
+  "persistent_strategy": "REQUEST_USER_CORRECTION",
+  "user_correction_requested": true,
+  "final_mode": "DEGRADED",
+  "passed": true
+}

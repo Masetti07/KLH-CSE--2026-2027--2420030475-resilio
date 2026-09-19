@@ -57,6 +57,9 @@ async def observe_api_requests(request, call_next):
     adaptation_engine.monitor.record_request(duration * 1000, response.status_code)
     route = request.scope.get("route")
     observe_request(request.method, getattr(route, "path", "unmatched"), response.status_code, duration)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
     return response
 
 

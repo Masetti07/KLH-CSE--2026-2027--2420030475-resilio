@@ -1,0 +1,20 @@
+# Day 6 focused security review
+
+## Scope and checks
+
+Reviewed upload routing and `PlanService`, FastAPI/Pydantic validation, SQLAlchemy access, CORS, frontend rendering, environment templates and ignore rules, Dockerfiles/Compose, and locked dependencies. This is a focused academic/local-prototype review, **not a formal penetration test**.
+
+## Findings and changes
+
+- Uploads already allow only PNG/JPG extensions matched to actual content, enforce byte and pixel limits, decode with Pillow/OpenCV, generate UUID storage names, and do not accept arbitrary client paths. An explicit decompression-bomb response was added so oversized-image decoding returns a controlled 413 instead of an internal error. Regression tests exercise malformed and oversized uploads.
+- FastAPI request models and SQLAlchemy remain the input and database boundaries; no user-composed SQL or arbitrary file path endpoint was found. Security response headers (`nosniff`, `DENY`, and `no-referrer`) were added and tested.
+- CORS remains restricted to documented local development/container origins, not `*`. No `dangerouslySetInnerHTML` or frontend credential was found in the reviewed source. React renders uploaded names as text.
+- `.env` and local runtime data remain ignored; `.env.example` contains placeholders. No deployment credential was added.
+- The frontend container was changed to an unprivileged user. Compose drops backend capabilities and forbids privilege escalation; the frontend serves port 8080 with a bounded upload size and security headers. The backend remains root inside its container because existing Day 5 named volumes and SQLite files are root-owned; a read-only volume ownership check confirmed this. Changing that user without an explicit, tested migration would make existing designs inaccessible. Host ports are bound to loopback. The Day 6 frontend image built; the backend build stalled on package downloads, so full container and runtime validation is still required.
+- Vite and Vitest received bounded upgrades in their existing major lines. A clean `npm ci` and fresh `npm audit` still report two moderate advisories in the test-only Vitest/`@vitest/mocker` chain. The full Trivy filesystem report identifies these as two package findings for the same CVE-2026-84373. The reported fix requires a Vitest major-version change, outside this minimal-change review; the findings are documented, not suppressed. Full tests, TypeScript, production build, and Trivy findings are recorded in [Day 6 testing](../testing/day-6.md).
+- A separate `pip-audit` of the original backend pins reported 31 unique advisory IDs across four packages (61 feed entries with duplicates). Updated pins for FastAPI/Starlette, `python-multipart`, Pillow, and pytest were installed. The full backend suite passed (90 tests) and a repeat `pip-audit -r src/backend/requirements.txt` reported no known vulnerabilities. This is a point-in-time advisory result, not a security guarantee.
+- The full Trivy 0.74.0 filesystem report found 0 CRITICAL, 1 HIGH, 2 MEDIUM, 1 LOW, and 0 UNKNOWN findings. The HIGH `DS-0002` finding is the backend container running as root, accepted for the existing root-owned runtime volume until a tested migration exists. The LOW `DS-0026` Dockerfile healthcheck finding is mitigated by the existing Compose backend healthcheck. The two MEDIUM dependency entries are the same test-only Vitest advisory noted above. The secret scanner found 0 secrets. The raw local JSON is excluded from Git because scanner metadata includes local Git identity; CI retains its report as an artifact.
+
+## Remaining limitations
+
+Security scanning is point-in-time and depends on scanner databases and supported files. Headers do not replace a full content-security policy. Local HTTP is not TLS, and prototype authentication/authorization is not production-ready. This review makes no claim of perfect security or safe internet exposure. Container-image vulnerability scanning was not performed by this filesystem scan. The local Day 6 image build was not completed, so Day 6 Docker runtime validation remains unverified.

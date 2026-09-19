@@ -1,0 +1,12 @@
+{
+  "NORMAL": {
+    "dpr": [1, 1.75],
+    "shadows": true,
+    "shadowMapSize": 1024
+  },
+  "PERFORMANCE": {
+    "dpr": 1,
+    "shadows": false,
+    "shadowMapSize": 256
+  }
+}

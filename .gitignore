@@ -38,6 +38,10 @@ htmlcov/
 coverage/
 *.log
 
+# Local raw security reports can contain Git author metadata or scanner evidence.
+# Commit reviewed summaries; CI publishes raw Trivy output as a workflow artifact.
+results/security/*.json
+
 # IDE and OS files
 .idea/
 .vscode/

@@ -1,0 +1,66 @@
+{
+  "experiment": "A - Adaptive rendering",
+  "timestamp": "2026-09-19T09:08:04.306567+00:00",
+  "measurement_scope": "Controlled fault input; no physical GPU performance improvement is claimed.",
+  "genuine_browser_fps": null,
+  "controlled_healthy_telemetry_fps": 60,
+  "controlled_simulated_fps": 16.0,
+  "configured_fps_threshold": 24.0,
+  "baseline_mode": "NORMAL",
+  "baseline_rendering_configuration": {
+    "dpr": [
+      1,
+      1.75
+    ],
+    "shadows": true,
+    "shadowMapSize": 1024
+  },
+  "condition": "RENDER_OVERLOAD",
+  "strategy": "REDUCE_RENDER_QUALITY",
+  "adapted_mode": "PERFORMANCE",
+  "adapted_rendering_configuration": {
+    "dpr": 1,
+    "shadows": false,
+    "shadowMapSize": 256
+  },
+  "observation": {
+    "reconstruction_confidence": 0.75,
+    "processing_duration_ms": 0,
+    "api_latency_ms": null,
+    "api_request_count": 0,
+    "api_error_count": 0,
+    "renderer_fps": 16.0,
+    "renderer_frame_time_ms": 62.5,
+    "renderer_health": "SLOW",
+    "processing_health": "HEALTHY",
+    "autosave_health": "HEALTHY",
+    "session_corrupted": false,
+    "simulated_conditions": [
+      "low_fps"
+    ],
+    "api_error_rate": 0.0
+  },
+  "recovery_healthy_checks_required": 3,
+  "recovery_observations": [
+    {
+      "healthy_observation": 1,
+      "mode": "RECOVERY",
+      "recovery_progress": 1,
+      "rendering_quality": "PERFORMANCE"
+    },
+    {
+      "healthy_observation": 2,
+      "mode": "RECOVERY",
+      "recovery_progress": 2,
+      "rendering_quality": "PERFORMANCE"
+    },
+    {
+      "healthy_observation": 3,
+      "mode": "NORMAL",
+      "recovery_progress": 3,
+      "rendering_quality": "NORMAL"
+    }
+  ],
+  "final_mode": "NORMAL",
+  "passed": true
+}
