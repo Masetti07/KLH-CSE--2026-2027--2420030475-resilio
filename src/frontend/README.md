@@ -14,6 +14,8 @@ Open `http://127.0.0.1:5173`. The backend must be running at `http://127.0.0.1:8
 
 The workspace provides Structure, Design Studio, Vastu, and Compare sections alongside the existing editing, persistence, and protected 3D controls.
 
+The start screen offers upload, three included sample PNG plans, and four local editable starter templates. Samples use the existing upload and OpenCV reconstruction path. Starter templates are created through `POST /api/plans/starters/{kind}` and saved as the same structural plan type as uploads; their geometry is illustrative and can be corrected in the Structure workspace. The blank template begins with no rooms, walls, or openings. Starter plans have no original or processed source image. Starting another plan clears the current plan state after warning about unsaved changes.
+
 ## Build
 
 ```powershell

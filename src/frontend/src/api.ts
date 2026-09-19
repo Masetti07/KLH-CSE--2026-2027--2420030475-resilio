@@ -1,6 +1,19 @@
 import type { AdaptationEvent, Design, DesignConfiguration, SimulationResponse, SimulationScenario, Structure, SystemMetrics, SystemState, UploadResult, VastuAnalysis } from "./types";
+import type { StarterKind } from "./utils/startPlans";
 
 export const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
+
+export async function createStarterPlan(kind: StarterKind): Promise<UploadResult> {
+  const response = await fetch(`${API_BASE}/api/plans/starters/${kind}`, { method: "POST" });
+  if (!response.ok) throw new Error("The starter plan could not be created.");
+  return response.json() as Promise<UploadResult>;
+}
+
+export async function samplePlanFile(name: string): Promise<File> {
+  const response = await fetch(`${API_BASE}/api/plans/samples/${encodeURIComponent(name)}`);
+  if (!response.ok) throw new Error("The sample plan could not be loaded.");
+  return new File([await response.blob()], name, { type: "image/png" });
+}
 
 export async function uploadPlan(file: File): Promise<UploadResult> {
   const body = new FormData();

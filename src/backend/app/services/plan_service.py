@@ -17,6 +17,7 @@ from app.simulator import SimulationScenario
 from app.models.plan_record import PlanRecord
 from app.processing.pipeline import process_floor_plan
 from app.schemas.plan import Dimensions, PlanDetail, StructuralPlan, UploadResult
+from app.services.starter_plans import STARTER_NAMES, StarterKind, make_starter_plan
 
 
 class UploadValidationError(ValueError):
@@ -36,6 +37,15 @@ class ControlledProcessingFailure(RuntimeError):
 class PlanService:
     def __init__(self, session: Session):
         self.session = session
+
+    def create_starter(self, kind: StarterKind) -> UploadResult:
+        plan_id = str(uuid4())
+        structure = make_starter_plan(kind, plan_id)
+        record = PlanRecord(id=plan_id, original_name=STARTER_NAMES[kind], media_type="application/x-resiliospace-starter", size_bytes=0, storage_path="", structure=structure.model_dump(mode="json"))
+        self.session.add(record)
+        self.session.commit()
+        self.session.refresh(record)
+        return UploadResult(plan=self._detail(record), structure=structure)
 
     async def upload(self, file: UploadFile) -> UploadResult:
         extension = Path(file.filename or "").suffix.lower()

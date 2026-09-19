@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -7,13 +9,37 @@ from sqlalchemy.orm import Session
 from app.database.session import get_session
 from app.schemas.plan import PlanDetail, StructuralPlan, UploadResult
 from app.services.plan_service import ControlledProcessingFailure, PlanNotFoundError, PlanService, UploadValidationError
+from app.services.starter_plans import StarterKind
 
 
 router = APIRouter(prefix="/api/plans", tags=["plans"])
+SAMPLES = {"sample_simple_1bed.png", "sample_compact_2bed.png", "sample_family_house.png"}
+
+
+def sample_dir(module_file: Path = Path(__file__)) -> Path | None:
+    configured = os.getenv("RESILIOSPACE_SAMPLE_DIR")
+    if configured:
+        return Path(configured)
+    return next((parent / "data" for parent in module_file.resolve().parents if (parent / "data").is_dir()), None)
 
 
 def service(session: Session = Depends(get_session)) -> PlanService:
     return PlanService(session)
+
+
+@router.post("/starters/{kind}", response_model=UploadResult, status_code=status.HTTP_201_CREATED)
+def create_starter(kind: StarterKind, plan_service: PlanService = Depends(service)) -> UploadResult:
+    return plan_service.create_starter(kind)
+
+
+@router.get("/samples/{name}", response_class=FileResponse)
+def get_sample(name: str) -> FileResponse:
+    if name not in SAMPLES:
+        raise HTTPException(status_code=404, detail="Sample plan was not found.")
+    directory = sample_dir()
+    if directory is None or not (directory / name).is_file():
+        raise HTTPException(status_code=503, detail="Sample plans are unavailable.")
+    return FileResponse(directory / name, media_type="image/png")
 
 
 @router.post("/upload", response_model=UploadResult, status_code=status.HTTP_201_CREATED)

@@ -63,7 +63,7 @@ export default function PlanSvg({ structure, editable = false, selection = null,
         const label = roomDisplayName(design, room, index); const visibleLabel = label.length > 24 ? `${label.slice(0, 22)}…` : label;
         return <g key={room.id}>
           <polygon className={onSelect ? "selectable-shape" : ""} points={room.polygon.map((point) => `${point.x * 1000},${point.y * 1000}`).join(" ")} fill={selected ? "rgba(229,155,81,.42)" : "rgba(203,230,220,.52)"} stroke={selected ? "#d97722" : "#75a894"} strokeWidth={selected ? 8 : 4} strokeDasharray="10 8" onPointerDown={() => onSelect?.({ kind: "room", id: room.id })}>
-            <title>{`${label}: ${Math.round(room.confidence * 100)}% confidence`}</title>
+            <title>{structure.processing_metadata.pipeline_version === "starter-1" ? `${label}: editable starter room` : `${label}: ${Math.round(room.confidence * 100)}% confidence`}</title>
           </polygon>
           <text className="room-plan-label" x={centroid.x * 1000} y={centroid.y * 1000} textAnchor="middle" dominantBaseline="middle" aria-label={`Room label: ${label}`}>{visibleLabel}</text>
         </g>;
@@ -72,7 +72,7 @@ export default function PlanSvg({ structure, editable = false, selection = null,
         const selected = selection?.kind === "wall" && selection.id === wall.id;
         return <g key={wall.id}>
           <line className={editable ? "selectable-shape" : ""} x1={wall.start_x * 1000} y1={wall.start_y * 1000} x2={wall.end_x * 1000} y2={wall.end_y * 1000} stroke={selected ? "#e27728" : "#18352b"} strokeWidth={Math.max(selected ? 12 : 6, wall.thickness * 1000)} strokeLinecap="square" onPointerDown={() => editable && onSelect?.({ kind: "wall", id: wall.id })}>
-            <title>{`${wall.id}: ${Math.round(wall.confidence * 100)}% confidence`}</title>
+            <title>{structure.processing_metadata.pipeline_version === "starter-1" ? `${wall.id}: editable starter wall` : `${wall.id}: ${Math.round(wall.confidence * 100)}% confidence`}</title>
           </line>
           {editable && selected && <>
             <circle className="endpoint-handle" cx={wall.start_x * 1000} cy={wall.start_y * 1000} r="16" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); drag.current = { wallId: wall.id, endpoint: "start" }; }} />
@@ -86,7 +86,7 @@ export default function PlanSvg({ structure, editable = false, selection = null,
         const color = opening.probable_type === "door" ? "#dc7b2e" : opening.probable_type === "window" ? "#1689be" : "#d1a11d";
         return <g key={opening.id} className={editable ? "selectable-shape" : ""} transform={`translate(${opening.position.x * 1000} ${opening.position.y * 1000})`} onPointerDown={(event) => { if (!editable) return; onSelect?.({ kind: "opening", id: opening.id }); drag.current = { openingId: opening.id }; event.currentTarget.setPointerCapture(event.pointerId); }}>
           <circle r={selected ? 20 : 14} fill={color} fillOpacity={low ? .55 : 1} stroke={selected ? "#172f27" : "#ffffff"} strokeWidth={selected ? 7 : 5} strokeDasharray={low ? "5 4" : undefined} />
-          <title>{`${opening.id}: ${opening.probable_type}, ${Math.round(opening.confidence * 100)}% confidence, wall ${opening.wall_id ?? "unassociated"}`}</title>
+          <title>{structure.processing_metadata.pipeline_version === "starter-1" ? `${opening.id}: editable starter ${opening.probable_type}` : `${opening.id}: ${opening.probable_type}, ${Math.round(opening.confidence * 100)}% confidence, wall ${opening.wall_id ?? "unassociated"}`}</title>
         </g>;
       })}
       {orientation !== null && <g aria-label={`North orientation ${orientation} degrees`}><rect x="842" y="24" width="130" height="82" rx="12" fill="#ffffff" stroke="#476b5e" strokeWidth="3" /><text x="907" y="55" textAnchor="middle" fontSize="18" fontWeight="700" fill="#24463a">NORTH</text><text x="907" y="91" textAnchor="middle" fontSize="34" fill="#c2682c">{orientationArrow(orientation)}</text></g>}

@@ -4,10 +4,12 @@ services:
       context: ./src/backend
     environment:
       RESILIOSPACE_RUNTIME_DIR: /app/runtime
+      RESILIOSPACE_SAMPLE_DIR: /app/sample-plans
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     volumes:
       - backend-runtime:/app/runtime
+      - ./data:/app/sample-plans:ro
     security_opt:
       - no-new-privileges:true
     cap_drop:
