@@ -126,13 +126,3 @@ docker compose up -d
 ```
 
 Open the frontend at `http://localhost:8080`, the backend at `http://localhost:8000`, and Prometheus at `http://localhost:9090`. Stop the stack with `docker compose down`. The backend runtime, including prototype SQLite state and uploaded sources, is stored in a named volume.
-
-## Limitations
-
-The current prototype targets clean PNG/JPG images of single-floor residential layouts, viewed top-down, with clearly visible walls, predominantly orthogonal geometry, and common/simple door and window representations. It does not promise perfect reconstruction of arbitrary architectural drawings. Automatic detection exposes uncertainty, and manual correction is available.
-
-Traditional Vastu Rule Analysis will be informational and culturally referential. It will not be presented as scientifically validated architectural or structural guidance.
-
-## License/Usage Note
-
-No license has been selected yet. Until a license is added, no permission to copy, modify, or distribute this repository is granted by default. The software is planned as a prototype and must not be treated as architectural, structural, legal, safety, engineering, or scientific advice.
