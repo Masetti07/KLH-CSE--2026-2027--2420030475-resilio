@@ -22,6 +22,7 @@ export type Structure = {
   id: string;
   source_dimensions: { width: number; height: number };
   normalized_dimensions: { width: number; height: number };
+  physical_dimensions?: { width_m: number; depth_m: number; metres_per_normalized_unit: number } | null;
   overall_confidence: number;
   processing_metadata: { pipeline_version: string; stages: string[]; warnings: string[]; debug_images: Record<string, string> };
   editing_metadata: { revision: number; modified_by: "automatic" | "manual"; last_saved_at: string | null };
@@ -30,7 +31,7 @@ export type Structure = {
   rooms: Room[];
   openings: Opening[];
 };
-export type Selection = { kind: "wall" | "room" | "opening" | "floor"; id: string } | null;
+export type Selection = { kind: "wall" | "room" | "opening" | "floor" | "prop"; id: string } | null;
 export type UploadResult = {
   plan: { id: string; original_name: string; media_type: string; size_bytes: number; status: string; overall_confidence: number };
   structure: Structure;
@@ -43,6 +44,8 @@ export type FloorAppearance = { color: string; finish: FloorFinish };
 export type DoorConfiguration = { color: string; width: number; style: "standard" | "sliding" | "double" };
 export type WindowConfiguration = { color: string; width: number; height: number; style: "standard" | "wide" | "floor_to_ceiling" };
 export type RoomSemantic = { name: string | null; room_type: RoomType | null };
+export type HomePropType = "clock" | "painting" | "bed" | "sofa" | "table" | "armchair" | "cupboard" | "flower_vase";
+export type HomeProp = { id: string; type: HomePropType; placement_type: "room" | "wall"; room_id: string | null; wall_id: string | null; position: Point; rotation: number; wall_offset: number };
 export type DesignConfiguration = {
   wall_height: number;
   wall_appearances: Record<string, WallAppearance>;
@@ -50,12 +53,15 @@ export type DesignConfiguration = {
   door_configurations: Record<string, DoorConfiguration>;
   window_configurations: Record<string, WindowConfiguration>;
   room_semantics: Record<string, RoomSemantic>;
+  props?: HomeProp[];
   orientation: Orientation | null;
 };
 export type VastuStatus = "satisfied" | "unsatisfied" | "not_applicable" | "cannot_evaluate";
 export type DirectionalZone = "north" | "north_east" | "east" | "south_east" | "south" | "south_west" | "west" | "north_west" | "center";
 export type VastuRuleResult = { rule_id: string; rule_title: string; room_id: string | null; room_name: string | null; room_type: RoomType; detected_zone: DirectionalZone | null; preferred_zones: DirectionalZone[]; result: VastuStatus; severity: "info" | "advisory"; explanation: string };
 export type VastuAnalysis = { design_id: string; orientation: Orientation | null; score: number | null; score_label: string; counts: Record<VastuStatus, number>; rule_results: VastuRuleResult[]; warnings: string[]; analyzed_at: string; analysis_version: string };
+export type VastuRule = { id: string; title: string; room_type: RoomType; preferred_zones: DirectionalZone[]; description: string; severity: "info" | "advisory"; source_reference: string; enabled: boolean };
+export type VastuAssistPreview = { analysis: VastuAnalysis; rules: VastuRule[] };
 export type Design = { id: string; plan_id: string; name: string; configuration: DesignConfiguration; latest_analysis: VastuAnalysis | null; created_at: string; updated_at: string };
 export type AdaptiveMode = "NORMAL" | "PERFORMANCE" | "DEGRADED" | "RECOVERY";
 export type SystemState = { overall: string; backend: string; processor: string; renderer: string; autosave: string; adaptive_mode: AdaptiveMode; active_condition: string; active_strategy: string | null; recovery_progress: number; recovery_required: number; rendering_quality: "NORMAL" | "PERFORMANCE"; use_2d_fallback: boolean };

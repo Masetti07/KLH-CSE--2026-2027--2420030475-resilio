@@ -55,8 +55,10 @@ class DesignService:
         if payload.configuration is not None:
             structure = StructuralPlan.model_validate(self._plan(record.plan_id).structure)
             self._validate_references(payload.configuration, structure)
+            previous = DesignConfiguration.model_validate(record.configuration)
             record.configuration = payload.configuration.model_dump(mode="json")
-            record.latest_analysis = None
+            if previous.orientation != payload.configuration.orientation or previous.room_semantics != payload.configuration.room_semantics:
+                record.latest_analysis = None
         if payload.name is not None:
             record.name = payload.name
         record.updated_at = datetime.now(timezone.utc)
@@ -98,6 +100,7 @@ class DesignService:
             door_configurations={opening.id: DoorConfiguration(width=opening.width) for opening in structure.openings if opening.probable_type == "door"},
             window_configurations={opening.id: WindowConfiguration(width=opening.width) for opening in structure.openings if opening.probable_type == "window"},
             room_semantics={room.id: RoomSemantic(name=room.name, room_type=room.type) for room in structure.rooms},
+            props=[],
             orientation=None,
         )
 
@@ -109,7 +112,8 @@ class DesignService:
         invalid_walls = set(configuration.wall_appearances) - wall_ids
         invalid_rooms = (set(configuration.floor_appearances) | set(configuration.room_semantics)) - room_ids
         invalid_openings = (set(configuration.door_configurations) | set(configuration.window_configurations)) - opening_ids
-        if invalid_walls or invalid_rooms or invalid_openings:
+        invalid_props = [prop.id for prop in configuration.props if (prop.room_id and prop.room_id not in room_ids) or (prop.wall_id and prop.wall_id not in wall_ids)]
+        if invalid_walls or invalid_rooms or invalid_openings or invalid_props:
             raise DesignValidationError("Design configuration references structural elements that do not exist.", 409)
 
     def _plan(self, plan_id: str) -> PlanRecord:

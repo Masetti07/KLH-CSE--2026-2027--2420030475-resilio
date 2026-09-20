@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.schemas.plan import RoomType
+from app.schemas.plan import Point, RoomType, StructuralPlan
 
 
 Orientation = Literal[0, 90, 180, 270]
@@ -39,6 +39,30 @@ class RoomSemantic(BaseModel):
     room_type: RoomType | None = None
 
 
+RoomPropType = Literal["bed", "sofa", "table", "armchair", "cupboard", "flower_vase"]
+WallPropType = Literal["clock", "painting"]
+
+
+class HomeProp(BaseModel):
+    id: str = Field(min_length=1, max_length=80)
+    type: RoomPropType | WallPropType
+    placement_type: Literal["room", "wall"]
+    room_id: str | None = None
+    wall_id: str | None = None
+    position: Point
+    rotation: float = Field(default=0, ge=0, lt=360)
+    wall_offset: float = Field(default=0.5, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_placement(self) -> "HomeProp":
+        is_wall = self.type in ("clock", "painting")
+        if is_wall and (self.placement_type != "wall" or not self.wall_id or self.room_id is not None):
+            raise ValueError("wall decor must reference one wall")
+        if not is_wall and (self.placement_type != "room" or not self.room_id or self.wall_id is not None):
+            raise ValueError("furniture must reference one room")
+        return self
+
+
 class DesignConfiguration(BaseModel):
     wall_height: float = Field(default=3.0, ge=0.5, le=10.0)
     wall_appearances: dict[str, WallAppearance] = Field(default_factory=dict)
@@ -46,7 +70,15 @@ class DesignConfiguration(BaseModel):
     door_configurations: dict[str, DoorConfiguration] = Field(default_factory=dict)
     window_configurations: dict[str, WindowConfiguration] = Field(default_factory=dict)
     room_semantics: dict[str, RoomSemantic] = Field(default_factory=dict)
+    props: list[HomeProp] = Field(default_factory=list, max_length=100)
     orientation: Orientation | None = None
+
+    @field_validator("props")
+    @classmethod
+    def unique_prop_ids(cls, props: list[HomeProp]) -> list[HomeProp]:
+        if len({prop.id for prop in props}) != len(props):
+            raise ValueError("prop IDs must be unique")
+        return props
 
 
 class DesignCreate(BaseModel):
@@ -130,6 +162,16 @@ class VastuAnalysis(BaseModel):
     warnings: list[str]
     analyzed_at: datetime
     analysis_version: str
+
+
+class VastuAssistRequest(BaseModel):
+    structure: StructuralPlan
+    configuration: DesignConfiguration
+
+
+class VastuAssistPreview(BaseModel):
+    analysis: VastuAnalysis
+    rules: list[VastuRule]
 
 
 class DesignDetail(BaseModel):

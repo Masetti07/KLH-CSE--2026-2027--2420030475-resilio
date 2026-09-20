@@ -5,9 +5,10 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { PerspectiveCamera } from "three";
 import type { DesignConfiguration, Selection, Structure } from "../types";
 import { orientationArrow, structureWithEffectiveWallHeight } from "../utils/designState";
-import { cameraFrame, modelBounds, normalizedToWorld, openingTransform, wallAngle, wallLength, wallMidpoint, wallThickness, type ModelBounds } from "../utils/geometry";
+import { cameraFrame, modelBounds, normalizedToWorld, openingTransform, openingVisualDepth, wallAngle, wallLength, wallMidpoint, wallThickness, worldScale, type ModelBounds } from "../utils/geometry";
 import { rendererSettings } from "../utils/rendererQuality";
 import ProceduralMaterial from "./ProceduralMaterial";
+import PropMeshes from "./PropMeshes";
 
 type CameraCommand = { name: "reset" | "top" | "perspective"; sequence: number };
 
@@ -34,6 +35,7 @@ function TelemetryProbe({ onTelemetry }: { onTelemetry?: (fps: number, frameTime
 }
 
 function Scene({ structure, design, selection, onSelect, command, bounds, performance, shadowMapSize, onTelemetry }: { structure: Structure; design?: DesignConfiguration; selection: Selection; onSelect: (selection: Selection) => void; command: CameraCommand; bounds: ModelBounds; performance: boolean; shadowMapSize: number; onTelemetry?: (fps: number, frameTime: number) => void }) {
+  const scale = worldScale(structure);
   const gridSize = Math.max(bounds.width, bounds.depth) * 1.45;
   return <>
     <hemisphereLight color="#fffdf7" groundColor="#68756e" intensity={1.45} />
@@ -42,7 +44,7 @@ function Scene({ structure, design, selection, onSelect, command, bounds, perfor
       <boxGeometry args={[bounds.width, 0.09, bounds.depth]} /><meshStandardMaterial color={selection?.kind === "floor" ? "#d8b782" : "#e8e1d4"} roughness={.94} />
     </mesh>
     {structure.rooms.map((room) => {
-      const xs = room.polygon.map((point) => normalizedToWorld(point).x); const zs = room.polygon.map((point) => normalizedToWorld(point).z);
+      const xs = room.polygon.map((point) => normalizedToWorld(point, scale).x); const zs = room.polygon.map((point) => normalizedToWorld(point, scale).z);
       const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
       const appearance = design?.floor_appearances[room.id];
       return <mesh key={room.id} position={[(minX + maxX) / 2, .015, (minZ + maxZ) / 2]} onClick={(event) => { event.stopPropagation(); onSelect({ kind: "room", id: room.id }); }}>
@@ -50,28 +52,29 @@ function Scene({ structure, design, selection, onSelect, command, bounds, perfor
       </mesh>;
     })}
     {structure.walls.map((wall) => {
-      const midpoint = wallMidpoint(wall); const selected = selection?.kind === "wall" && selection.id === wall.id;
+      const midpoint = wallMidpoint(wall, scale); const selected = selection?.kind === "wall" && selection.id === wall.id;
       const appearance = design?.wall_appearances[wall.id];
       return <mesh key={wall.id} position={[midpoint.x, structure.wall_height / 2, midpoint.z]} rotation={[0, -wallAngle(wall), 0]} castShadow={!performance} receiveShadow={!performance} onClick={(event) => { event.stopPropagation(); onSelect({ kind: "wall", id: wall.id }); }}>
-        <boxGeometry args={[wallLength(wall), structure.wall_height, wallThickness(wall)]} /><ProceduralMaterial finish={appearance?.finish ?? "paint"} color={appearance?.color ?? "#eee9de"} width={wallLength(wall)} height={structure.wall_height} selected={selected} />
+        <boxGeometry args={[wallLength(wall, scale), structure.wall_height, wallThickness(wall, scale)]} /><ProceduralMaterial finish={appearance?.finish ?? "paint"} color={appearance?.color ?? "#eee9de"} width={wallLength(wall, scale)} height={structure.wall_height} selected={selected} />
       </mesh>;
     })}
     {structure.openings.map((opening) => {
-      const wall = structure.walls.find((item) => item.id === opening.wall_id); const transform = openingTransform(opening, wall); const selected = selection?.kind === "opening" && selection.id === opening.id;
+      const wall = structure.walls.find((item) => item.id === opening.wall_id); const transform = openingTransform(opening, wall, scale); const selected = selection?.kind === "opening" && selection.id === opening.id;
       const door = design?.door_configurations[opening.id]; const window = design?.window_configurations[opening.id];
       const isWindow = opening.probable_type === "window"; const isDoor = opening.probable_type === "door";
       const configuredWidth = isDoor ? door?.width ?? opening.width : isWindow ? window?.width ?? opening.width : opening.width;
-      const width = Math.max(.14, configuredWidth * 10 * (isWindow && window?.style === "wide" ? 1.2 : 1));
+      const width = Math.max(.14, configuredWidth * scale * (isWindow && window?.style === "wide" ? 1.2 : 1));
       const height = isWindow ? (window?.style === "floor_to_ceiling" ? Math.max(2.2, window.height) : window?.height ?? transform.height) : transform.height;
       const sill = isWindow ? window?.style === "floor_to_ceiling" ? 0 : transform.sillHeight : 0;
       const color = isDoor ? door?.color ?? "#8b4d28" : isWindow ? window?.color ?? "#67b9dc" : "#d39b28";
       const panels = isDoor && door?.style === "double" ? 2 : 1; const panelWidth = panels === 2 ? width / 2 - .025 : door?.style === "sliding" ? width * 1.08 : width;
       return <group key={opening.id} position={[transform.x, sill + height / 2, transform.z]} rotation={[0, -transform.angle, 0]} onClick={(event) => { event.stopPropagation(); onSelect({ kind: "opening", id: opening.id }); }}>
         {Array.from({ length: panels }, (_, index) => <mesh key={index} position={[panels === 2 ? (index ? 1 : -1) * (panelWidth / 2 + .025) : 0, 0, 0]} castShadow={!performance}>
-          <boxGeometry args={[panelWidth, height, isWindow ? .1 : door?.style === "sliding" ? .08 : .13]} /><meshStandardMaterial color={selected ? "#ff8b30" : color} emissive={selected ? "#5d2100" : "#000000"} transparent={isWindow} opacity={isWindow ? .66 : 1} roughness={isWindow ? .22 : .65} metalness={isWindow ? .12 : 0} />
+          <boxGeometry args={[panelWidth, height, openingVisualDepth(wall, scale, isWindow)]} /><meshStandardMaterial color={selected ? "#ff8b30" : color} emissive={selected ? "#5d2100" : "#000000"} transparent={isWindow} opacity={isWindow ? .66 : 1} roughness={isWindow ? .22 : .65} metalness={isWindow ? .12 : 0} />
         </mesh>)}
       </group>;
     })}
+    <PropMeshes structure={structure} design={design} selection={selection} onSelect={onSelect} performance={performance} />
     <Grid args={[gridSize, gridSize]} position={[bounds.center.x, -.095, bounds.center.z]} cellSize={Math.max(.25, gridSize / 30)} sectionSize={Math.max(1, gridSize / 6)} cellColor="#acb6b0" sectionColor="#7e8d85" cellThickness={.45} sectionThickness={.75} fadeDistance={gridSize * 1.1} fadeStrength={1.3} />
     <CameraRig command={command} bounds={bounds} modelKey={structure.id} />
     <TelemetryProbe onTelemetry={onTelemetry} />
@@ -83,7 +86,7 @@ type Props = { structure: Structure; design?: DesignConfiguration; selection: Se
 export default function ThreeViewer({ structure, design, selection, onSelect, fullscreen, onToggleFullscreen, renderingQuality = "NORMAL", available = true, onTelemetry }: Props) {
   const [command, setCommand] = useState<CameraCommand>({ name: "perspective", sequence: 0 });
   const renderStructure = useMemo(() => structureWithEffectiveWallHeight(structure, design), [design, structure]);
-  const bounds = useMemo(() => modelBounds(renderStructure), [renderStructure]);
+  const bounds = useMemo(() => modelBounds(renderStructure, worldScale(renderStructure)), [renderStructure]);
   const settings = rendererSettings(renderingQuality);
   const issue = (name: CameraCommand["name"]) => setCommand((current) => ({ name, sequence: current.sequence + 1 }));
   if (!available) return <div className="renderer-fallback" role="status"><strong>3D rendering is temporarily unavailable.</strong><p>Your design is preserved and the 2D workspace remains available.</p></div>;

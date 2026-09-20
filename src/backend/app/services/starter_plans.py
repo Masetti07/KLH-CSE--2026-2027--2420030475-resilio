@@ -2,6 +2,8 @@
 
 from typing import Literal
 
+from pydantic import BaseModel, Field
+
 from app.schemas.plan import Opening, Point, ProcessingMetadata, Room, StructuralPlan, Wall
 
 
@@ -12,7 +14,14 @@ STARTER_NAMES: dict[StarterKind, str] = {
 }
 
 
-def make_starter_plan(kind: StarterKind, plan_id: str) -> StructuralPlan:
+class BlankDimensions(BaseModel):
+    width_m: float = Field(default=10, ge=3, le=30)
+    depth_m: float = Field(default=8, ge=3, le=30)
+    wall_height_m: float = Field(default=3, ge=2.2, le=5)
+
+
+def make_starter_plan(kind: StarterKind, plan_id: str, dimensions: BlankDimensions | None = None) -> StructuralPlan:
+    dimensions = dimensions or BlankDimensions()
     layouts = {
         "blank": [],
         "one_bedroom": [("Living Room", "living_room", 0, 0), ("Kitchen", "kitchen", 1, 0),
@@ -28,6 +37,17 @@ def make_starter_plan(kind: StarterKind, plan_id: str) -> StructuralPlan:
     walls: list[Wall] = []
     openings: list[Opening] = []
     edges: set[tuple[float, float, float, float]] = set()
+    physical_dimensions = None
+    if kind == "blank":
+        scale = round(max(dimensions.width_m, dimensions.depth_m) / .8, 8)
+        half_width = dimensions.width_m / scale / 2
+        half_depth = dimensions.depth_m / scale / 2
+        x0, x1 = .5 - half_width, .5 + half_width
+        y0, y1 = .5 - half_depth, .5 + half_depth
+        corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+        walls = [Wall(id=f"boundary-{index + 1}", start_x=start[0], start_y=start[1], end_x=end[0], end_y=end[1], thickness=.012, confidence=1)
+                 for index, (start, end) in enumerate(zip(corners, corners[1:] + corners[:1]))]
+        physical_dimensions = {"width_m": dimensions.width_m, "depth_m": dimensions.depth_m, "metres_per_normalized_unit": scale}
     for index, (name, room_type, col, row) in enumerate(cells):
         x0, x1 = round(.1 + col * .8 / columns, 6), round(.1 + (col + 1) * .8 / columns, 6)
         y0, y1 = .1 + row * .4, .1 + (row + 1) * .4
@@ -52,7 +72,7 @@ def make_starter_plan(kind: StarterKind, plan_id: str) -> StructuralPlan:
         entrance_wall = next(wall for wall in walls if wall.start_x == .1 and wall.end_x == .1 and wall.start_y == .1 and wall.end_y == .5)
         openings.append(Opening(id="door-entrance", wall_id=entrance_wall.id, position=Point(x=.1, y=.3), width=.08, probable_type="door", confidence=1))
     return StructuralPlan(
-        id=plan_id, source_dimensions={"width": 1000, "height": 1000}, normalized_dimensions={"width": 1, "height": 1},
+        id=plan_id, source_dimensions={"width": 1000, "height": 1000}, normalized_dimensions={"width": 1, "height": 1}, physical_dimensions=physical_dimensions,
         overall_confidence=1, processing_metadata=ProcessingMetadata(pipeline_version="starter-1", stages=["editable_starter"], warnings=["Editable starter layout; dimensions and openings are illustrative."], debug_images={}),
-        editing_metadata={"modified_by": "manual"}, wall_height=3, walls=walls, rooms=rooms, openings=openings,
+        editing_metadata={"modified_by": "manual"}, wall_height=dimensions.wall_height_m if kind == "blank" else 3, walls=walls, rooms=rooms, openings=openings,
     )

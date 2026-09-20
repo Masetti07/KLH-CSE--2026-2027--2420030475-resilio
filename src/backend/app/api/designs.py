@@ -4,11 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.database.session import get_session
-from app.schemas.design import DesignCreate, DesignDetail, DesignDuplicate, DesignUpdate, VastuAnalysis
+from app.schemas.design import DesignCreate, DesignDetail, DesignDuplicate, DesignUpdate, VastuAnalysis, VastuAssistPreview, VastuAssistRequest
 from app.services.design_service import DesignNotFoundError, DesignService, DesignValidationError
+from app.services.vastu import VASTU_RULES, analyze_design
 
 
 router = APIRouter(tags=["designs"])
+
+
+@router.post("/api/vastu/assist-preview", response_model=VastuAssistPreview)
+def vastu_assist_preview(payload: VastuAssistRequest) -> VastuAssistPreview:
+    return VastuAssistPreview(analysis=analyze_design("preview", payload.configuration, payload.structure), rules=list(VASTU_RULES))
 
 
 def service(session: Session = Depends(get_session)) -> DesignService:

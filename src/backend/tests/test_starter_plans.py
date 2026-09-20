@@ -9,6 +9,9 @@ def test_starter_factory_and_persistence(client, kind, bedrooms):
     first = make_starter_plan(kind, "fixed-id")
     assert first == make_starter_plan(kind, "fixed-id")
     assert sum(room.type in ("bedroom", "master_bedroom") for room in first.rooms) == bedrooms
+    if kind == "blank":
+        assert len(first.walls) == 4
+        assert first.rooms == [] and first.openings == []
     assert first.processing_metadata.pipeline_version == "starter-1"
     assert all(opening.wall_id in {wall.id for wall in first.walls} for opening in first.openings)
     response = client.post(f"/api/plans/starters/{kind}")
@@ -32,6 +35,29 @@ def test_starter_validation_and_sample_allowlist(client):
     assert reconstructed.status_code == 201
     assert reconstructed.json()["structure"]["processing_metadata"]["pipeline_version"] != "starter-1"
     assert client.get("/api/plans/samples/unknown.png").status_code == 404
+
+
+def test_blank_dimensions_validate_and_persist(client):
+    dimensions = {"width_m": 10.2, "depth_m": 8, "wall_height_m": 3}
+    response = client.post("/api/plans/starters/blank", json=dimensions)
+    assert response.status_code == 201
+    structure = response.json()["structure"]
+    assert len(structure["walls"]) == 4
+    assert structure["wall_height"] == 3
+    assert structure["physical_dimensions"] == {"width_m": 10.2, "depth_m": 8, "metres_per_normalized_unit": 12.75}
+    top, side = structure["walls"][:2]
+    assert abs((top["end_x"] - top["start_x"]) * 12.75 - 10.2) < 1e-6
+    assert abs((side["end_y"] - side["start_y"]) * 12.75 - 8) < 1e-6
+    design = client.post(f"/api/plans/{structure['id']}/designs", json={})
+    assert design.status_code == 201
+    assert design.json()["configuration"]["wall_height"] == 3
+    assert client.get(f"/api/plans/{structure['id']}/structure").json()["physical_dimensions"] == structure["physical_dimensions"]
+    saved = client.put(f"/api/plans/{structure['id']}/structure", json=structure)
+    assert saved.status_code == 200
+    assert saved.json()["physical_dimensions"] == structure["physical_dimensions"]
+    for invalid in ({"width_m": 2}, {"depth_m": 31}, {"wall_height_m": 1}):
+        assert client.post("/api/plans/starters/blank", json=invalid).status_code == 422
+    assert client.post("/api/plans/starters/one_bedroom", json=dimensions).status_code == 400
 
 
 def test_sample_directory_uses_configured_mount_or_discovers_local_data(tmp_path, monkeypatch, client):

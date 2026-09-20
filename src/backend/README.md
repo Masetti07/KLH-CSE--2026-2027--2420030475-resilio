@@ -15,6 +15,8 @@ Set-Location .\src\backend
 
 The API is available at `http://127.0.0.1:8000`, with interactive OpenAPI documentation at `http://127.0.0.1:8000/docs`.
 
+`POST /api/vastu/assist-preview` accepts the current `structure` and design `configuration`, returns the shared Traditional Vastu rule analysis plus the configured rule definitions, and does not persist the preview. Saving a structure invalidates prior stored Vastu analysis for its designs.
+
 ## Test
 
 ```powershell

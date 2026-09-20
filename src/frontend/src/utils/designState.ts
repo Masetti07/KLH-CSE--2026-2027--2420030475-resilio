@@ -22,6 +22,7 @@ export function defaultDesignConfiguration(structure: Structure): DesignConfigur
     door_configurations: Object.fromEntries(structure.openings.filter((opening) => opening.probable_type === "door").map((opening) => [opening.id, { color: "#8b4d28", width: opening.width, style: "standard" }])),
     window_configurations: Object.fromEntries(structure.openings.filter((opening) => opening.probable_type === "window").map((opening) => [opening.id, { color: "#67b9dc", width: opening.width, height: 1.1, style: "standard" }])),
     room_semantics: Object.fromEntries(structure.rooms.map((room) => [room.id, { name: room.name, room_type: room.type }])),
+    props: [],
     orientation: null,
   };
 }
@@ -72,6 +73,7 @@ export function reconcileDesignConfiguration(configuration: DesignConfiguration,
     if (opening.probable_type === "window") next.window_configurations[opening.id] ??= { color: "#67b9dc", width: opening.width, height: 1.1, style: "standard" };
   });
   const wallIds = new Set(structure.walls.map((item) => item.id)); const roomIds = new Set(structure.rooms.map((item) => item.id)); const openingIds = new Set(structure.openings.map((item) => item.id));
+  next.props = (next.props ?? []).filter((prop) => prop.placement_type === "room" ? Boolean(prop.room_id && roomIds.has(prop.room_id)) : Boolean(prop.wall_id && wallIds.has(prop.wall_id)));
   Object.keys(next.wall_appearances).forEach((id) => { if (!wallIds.has(id)) delete next.wall_appearances[id]; });
   [next.floor_appearances, next.room_semantics].forEach((record) => Object.keys(record).forEach((id) => { if (!roomIds.has(id)) delete record[id]; }));
   [next.door_configurations, next.window_configurations].forEach((record) => Object.keys(record).forEach((id) => { if (!openingIds.has(id)) delete record[id]; }));

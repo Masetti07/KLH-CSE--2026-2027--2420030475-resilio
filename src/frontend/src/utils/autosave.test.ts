@@ -10,4 +10,11 @@ describe("working snapshots", () => {
   it("keeps bounded valid history", () => { const store = memory(); for (let i = 0; i < 5; i++) writeWorkingSnapshot(snapshot(String(i)), store); expect(JSON.parse(store.getItem()).length).toBe(SNAPSHOT_LIMIT); });
   it("restores the previous valid snapshot when the newest is corrupt", () => { const store = memory([{ bad: true }, snapshot()]); const result = readSnapshotHistory("p1", store); expect(result.recoveredPrevious).toBe(true); expect(result.snapshot?.metadata.plan_id).toBe("p1"); });
   it("injects only an invalid newest entry and preserves a valid predecessor", () => { const store = memory([snapshot()]); const result = injectCorruptedNewestSnapshot("p1", store); expect(result.corrupted).toBe(true); expect(result.recoveredPrevious).toBe(true); expect(result.snapshot?.payload.structure.id).toBe("p1"); });
+  it("validates saved props while accepting older snapshots without props", () => {
+    const withProp = snapshot();
+    const value = { ...withProp, payload: { ...withProp.payload, design_configuration: { ...withProp.payload.design_configuration, props: [{ id: "prop-1", type: "bed", placement_type: "room", room_id: "room", wall_id: null, position: { x: .5, y: .5 }, rotation: 0, wall_offset: .5 }] } } };
+    expect(validWorkingSnapshot(withProp)).toBe(true);
+    expect(validWorkingSnapshot(value)).toBe(true);
+    expect(validWorkingSnapshot({ ...value, payload: { ...value.payload, design_configuration: { ...value.payload.design_configuration, props: [{ ...value.payload.design_configuration.props[0], position: { x: 2, y: .5 } }] } } })).toBe(false);
+  });
 });

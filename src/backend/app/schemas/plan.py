@@ -22,6 +22,12 @@ class NormalizedDimensions(BaseModel):
     height: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
+class PhysicalDimensions(BaseModel):
+    width_m: float = Field(gt=0)
+    depth_m: float = Field(gt=0)
+    metres_per_normalized_unit: float = Field(gt=0)
+
+
 class Wall(BaseModel):
     id: str
     start_x: float = Field(ge=0.0, le=1.0)
@@ -72,6 +78,7 @@ class StructuralPlan(BaseModel):
     id: str
     source_dimensions: Dimensions
     normalized_dimensions: NormalizedDimensions
+    physical_dimensions: PhysicalDimensions | None = None
     overall_confidence: float = Field(ge=0.0, le=1.0)
     processing_metadata: ProcessingMetadata
     editing_metadata: EditingMetadata = Field(default_factory=EditingMetadata)

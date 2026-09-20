@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 from fastapi import UploadFile
 from PIL import Image, UnidentifiedImageError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -15,9 +16,10 @@ from app.adaptation import engine as adaptation_engine
 from app.observability import observe_processing
 from app.simulator import SimulationScenario
 from app.models.plan_record import PlanRecord
+from app.models.design_record import DesignRecord
 from app.processing.pipeline import process_floor_plan
 from app.schemas.plan import Dimensions, PlanDetail, StructuralPlan, UploadResult
-from app.services.starter_plans import STARTER_NAMES, StarterKind, make_starter_plan
+from app.services.starter_plans import STARTER_NAMES, BlankDimensions, StarterKind, make_starter_plan
 
 
 class UploadValidationError(ValueError):
@@ -38,9 +40,9 @@ class PlanService:
     def __init__(self, session: Session):
         self.session = session
 
-    def create_starter(self, kind: StarterKind) -> UploadResult:
+    def create_starter(self, kind: StarterKind, dimensions: BlankDimensions | None = None) -> UploadResult:
         plan_id = str(uuid4())
-        structure = make_starter_plan(kind, plan_id)
+        structure = make_starter_plan(kind, plan_id, dimensions)
         record = PlanRecord(id=plan_id, original_name=STARTER_NAMES[kind], media_type="application/x-resiliospace-starter", size_bytes=0, storage_path="", structure=structure.model_dump(mode="json"))
         self.session.add(record)
         self.session.commit()
@@ -130,6 +132,8 @@ class PlanService:
             })
         })
         record.structure = updated.model_dump(mode="json")
+        for design in self.session.scalars(select(DesignRecord).where(DesignRecord.plan_id == plan_id)):
+            design.latest_analysis = None
         self.session.commit()
         self.session.refresh(record)
         return updated

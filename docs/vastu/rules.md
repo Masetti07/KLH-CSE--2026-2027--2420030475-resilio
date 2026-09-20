@@ -12,6 +12,7 @@ Every runtime rule defines `id`, `title`, `room_type`, `preferred_zones`, `descr
 | `TVR-ENTRANCE-01` | Entrance | North, North-East, East | Advisory | Contemporary residential Vastu convention represented in the VNSGU overview. |
 | `TVR-POOJA-01` | Pooja / Prayer Room | North-East | Informational | *Shodasa-Mandira-Chakra* translation places the family chapel in the north-east. |
 | `TVR-STUDY-01` | Study | West | Informational | *Shodasa-Mandira-Chakra* translation places study in the west. |
+| `TVR-BATHROOM-01` | Bathroom | East | Informational | [AWGP's traditional bathroom guidance](https://www.awgp.org/en/literature/akhandjyoti/2004/May_Jun/v1.VastuShastra) places a bathing room in the east. Guidance for combined bathrooms and toilets varies; this rule is a configurable cultural preference. |
 
 ## References
 

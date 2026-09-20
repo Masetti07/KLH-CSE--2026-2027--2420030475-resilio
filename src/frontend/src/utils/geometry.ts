@@ -2,6 +2,7 @@ import type { Opening, Point, Structure, Wall } from "../types";
 
 export const PLAN_SCALE = 10;
 export const DEFAULT_WALL_THICKNESS = 0.12;
+export const worldScale = (structure: Structure): number => structure.physical_dimensions?.metres_per_normalized_unit ?? PLAN_SCALE;
 
 export type WorldPoint = { x: number; z: number };
 export type ModelBounds = {
@@ -37,6 +38,10 @@ export function wallAngle(wall: Wall): number {
 
 export function wallThickness(wall: Wall, scale = PLAN_SCALE): number {
   return Math.max(DEFAULT_WALL_THICKNESS, wall.thickness * scale);
+}
+
+export function openingVisualDepth(wall: Wall | undefined, scale: number, isWindow: boolean): number {
+  return Math.max(isWindow ? .1 : .13, wall ? wallThickness(wall, scale) + .02 : 0);
 }
 
 export function openingTransform(opening: Opening, wall: Wall | undefined, scale = PLAN_SCALE) {

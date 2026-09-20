@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { activateSimulation, artifactUrl, clearSimulation, createDesign, createStarterPlan, deleteDesign, duplicateDesign, listDesigns, loadSimulationStatus, loadStructure, loadSystemStatus, restoreAllSimulations, runVastuAnalysis, samplePlanFile, saveDesign, saveStructure, sendSystemTelemetry, uploadPlan } from "../api";
-import type { AdaptationEvent, Design, DesignConfiguration, Selection, SimulationScenario, SimulationStatus, Structure, SystemMetrics, SystemState, UploadResult, VastuAnalysis } from "../types";
+import { activateSimulation, artifactUrl, clearSimulation, createDesign, createStarterPlan, deleteDesign, duplicateDesign, listDesigns, loadSimulationStatus, loadStructure, loadSystemStatus, previewVastuAssist, restoreAllSimulations, runVastuAnalysis, samplePlanFile, saveDesign, saveStructure, sendSystemTelemetry, uploadPlan } from "../api";
+import type { AdaptationEvent, Design, DesignConfiguration, Selection, SimulationScenario, SimulationStatus, Structure, SystemMetrics, SystemState, UploadResult, VastuAnalysis, VastuAssistPreview } from "../types";
 import { cloneStructure, commitHistory, initialHistory, redoHistory, undoHistory } from "../utils/editState";
-import { cloneConfiguration, reconcileDesignConfiguration } from "../utils/designState";
+import { cloneConfiguration, defaultDesignConfiguration, reconcileDesignConfiguration } from "../utils/designState";
 import { confirmDiscardForNewFile, newFileResetState } from "../utils/sessionState";
 import { injectCorruptedNewestSnapshot, readSnapshotHistory, writeWorkingSnapshot, type WorkingSnapshot } from "../utils/autosave";
 import ComparePanel from "./ComparePanel";
@@ -14,28 +14,38 @@ import ResilienceLab from "./ResilienceLab";
 import RoomAssignments from "./RoomAssignments";
 import StructureInspector from "./StructureInspector";
 import ThreeViewer from "./ThreeViewer";
+import HomePropsPanel from "./HomePropsPanel";
 import VastuPanel from "./VastuPanel";
+import VastuAssist from "./VastuAssist";
+import { selectedRoomGuidance } from "../utils/vastuAssist";
 import WorkspaceNavigation, { type StudioSection } from "./WorkspaceNavigation";
 import StartExperience from "./StartExperience";
-import type { StarterKind } from "../utils/startPlans";
+import BlankSpaceSetup from "./BlankSpaceSetup";
+import { starterEntryView, type BlankDimensions, type StarterKind } from "../utils/startPlans";
+import { downloadPlanPng } from "../utils/planExport";
+import PropQuickEdit from "./PropQuickEdit";
 
 type Tab = "Original" | "Processed" | "Reconstruction" | "3D View";
 type Mode = "view" | "edit";
 const STORAGE_KEY = "resiliospace:last-plan";
 
-export default function Workspace() {
-  const [startView, setStartView] = useState<"home" | "samples" | "starters" | "upload" | "workspace">("home");
+export default function Workspace({ startRequest = 0 }: { startRequest?: number }) {
+  const [startView, setStartView] = useState<"home" | "samples" | "starters" | "blank_setup" | "upload" | "workspace">("home");
+  useEffect(() => { if (startRequest > 0) { planGeneration.current += 1; setStartView("home"); } }, [startRequest]);
   const [startBusy, setStartBusy] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const planGeneration = useRef(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null); const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [result, setResult] = useState<UploadResult | null>(null); const [history, setHistory] = useState(() => initialHistory()); const [savedSnapshot, setSavedSnapshot] = useState("");
   const [status, setStatus] = useState<"idle" | "selected" | "processing" | "complete" | "saving" | "error">("idle"); const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("Original"); const [mode, setMode] = useState<Mode>("view"); const [section, setSection] = useState<StudioSection>("Structure"); const [selection, setSelection] = useState<Selection>(null);
+  const [designView, setDesignView] = useState<"2D" | "3D">("3D");
   const [sourceCollapsed, setSourceCollapsed] = useState(false); const [inspectorCollapsed, setInspectorCollapsed] = useState(false); const [fullscreen3D, setFullscreen3D] = useState(false);
   const [designs, setDesigns] = useState<Design[]>([]); const [activeDesign, setActiveDesign] = useState<Design | null>(null); const [designConfiguration, setDesignConfiguration] = useState<DesignConfiguration | null>(null);
   const [designSnapshot, setDesignSnapshot] = useState(""); const [designBusy, setDesignBusy] = useState(false); const [designError, setDesignError] = useState<string | null>(null);
   const [vastuAnalysis, setVastuAnalysis] = useState<VastuAnalysis | null>(null); const [showZones, setShowZones] = useState(false);
+  const [assistEnabled, setAssistEnabled] = useState(false); const [assistPreview, setAssistPreview] = useState<VastuAssistPreview | null>(null); const [assistBusy, setAssistBusy] = useState(false); const [assistError, setAssistError] = useState<string | null>(null);
   const [compareAId, setCompareAId] = useState(""); const [compareBId, setCompareBId] = useState(""); const [compareVisualId, setCompareVisualId] = useState("");
   const [systemState, setSystemState] = useState<SystemState | null>(null); const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null); const [adaptations, setAdaptations] = useState<AdaptationEvent[]>([]); const [systemError, setSystemError] = useState<string | null>(null);
   const [rendererUnavailable, setRendererUnavailable] = useState(false); const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
@@ -65,7 +75,7 @@ export default function Workspace() {
   useEffect(() => {
     if (restorationAttempted.current) return; restorationAttempted.current = true;
     const raw = localStorage.getItem(STORAGE_KEY); if (!raw) return;
-    try { const plan = JSON.parse(raw) as UploadResult["plan"]; const recovery = readSnapshotHistory(plan.id); const generation = planGeneration.current; loadStructure(plan.id).then((loaded) => { if (generation !== planGeneration.current) return; const restored = recovery.snapshot?.payload.structure ?? loaded; setResult({ plan, structure: restored }); setHistory(initialHistory(restored)); setSavedSnapshot(JSON.stringify(loaded)); setStatus("complete"); setTab("Reconstruction"); setStartView("workspace"); void loadDesignState(plan.id, restored, recovery.snapshot?.payload.design_configuration); if (recovery.recoveredPrevious) setRecoveryMessage("The latest working snapshot could not be restored. ResilioSpace recovered the previous valid design state."); if (recovery.corrupted) void sendSystemTelemetry({ session_corrupted: true, autosave_health: recovery.snapshot ? "HEALTHY" : "FAILED" }).then(setSystemState).catch(() => undefined); }).catch(() => localStorage.removeItem(STORAGE_KEY)); }
+    try { const plan = JSON.parse(raw) as UploadResult["plan"]; const recovery = readSnapshotHistory(plan.id); const generation = planGeneration.current; loadStructure(plan.id).then((loaded) => { if (generation !== planGeneration.current) return; const restored = recovery.snapshot?.payload.structure ?? loaded; setResult({ plan, structure: restored }); setHistory(initialHistory(restored)); setSavedSnapshot(JSON.stringify(loaded)); setStatus("complete"); setTab("Reconstruction"); setStartView("workspace"); void loadDesignState(plan.id, restored, recovery.snapshot?.payload.design_configuration); if (recovery.recoveredPrevious) setRecoveryMessage("The latest working snapshot could not be restored. ResilioSpace recovered the previous valid design state."); if (recovery.corrupted) void sendSystemTelemetry({ session_corrupted: true, autosave_health: recovery.snapshot ? "HEALTHY" : "FAILED" }).then(setSystemState).catch(() => undefined); }).catch(() => { if (generation === planGeneration.current) localStorage.removeItem(STORAGE_KEY); }); }
     catch { localStorage.removeItem(STORAGE_KEY); }
   }, []);
   useEffect(() => {
@@ -90,17 +100,22 @@ export default function Workspace() {
     const reconciled = reconcileDesignConfiguration(designConfiguration, structure);
     if (JSON.stringify(reconciled) !== JSON.stringify(designConfiguration)) setDesignConfiguration(reconciled);
   }, [structure, activeDesign?.id]);
+  const assistInputKey = JSON.stringify({ structure, orientation: designConfiguration?.orientation, room_semantics: designConfiguration?.room_semantics });
+  useEffect(() => {
+    if (!assistEnabled || section !== "Structure" || !structure || !designConfiguration || designConfiguration.orientation === null) { setAssistPreview(null); setAssistBusy(false); setAssistError(null); return; }
+    const controller = new AbortController();
+    setAssistPreview(null); setAssistBusy(true); setAssistError(null);
+    const timer = window.setTimeout(() => { void previewVastuAssist(structure, designConfiguration, controller.signal).then((value) => { if (!controller.signal.aborted) setAssistPreview(value); }).catch((reason) => { if (!controller.signal.aborted) setAssistError(reason instanceof Error ? reason.message : "Traditional Vastu Assist could not be updated."); }).finally(() => { if (!controller.signal.aborted) setAssistBusy(false); }); }, 250);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [assistEnabled, section, assistInputKey]);
 
   const resetPlan = () => {
     planGeneration.current += 1;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     localStorage.removeItem(STORAGE_KEY); const reset = newFileResetState();
-    setSelectedFile(null); setPreviewUrl(null); setResult(reset.result); setHistory(reset.history); setSavedSnapshot(reset.savedSnapshot); setSelection(reset.selection); setError(null); setStatus("idle"); setTab(reset.tab); setMode("view"); setSection(reset.section); setDesigns(reset.designs); setActiveDesign(reset.activeDesign); setDesignConfiguration(reset.designConfiguration); setDesignSnapshot(reset.designSnapshot); setVastuAnalysis(reset.vastuAnalysis); setShowZones(reset.showZones); setCompareAId(reset.compareAId); setCompareBId(reset.compareBId); setCompareVisualId(reset.compareVisualId); setFullscreen3D(reset.fullscreen3D); setInspectorCollapsed(reset.inspectorCollapsed); setSourceCollapsed(false); setDesignError(null); setRecoveryMessage(null); setDesignBusy(false); if (inputRef.current) inputRef.current.value = "";
+    setSelectedFile(null); setPreviewUrl(null); setResult(reset.result); setHistory(reset.history); setSavedSnapshot(reset.savedSnapshot); setSelection(reset.selection); setError(null); setStatus("idle"); setTab(reset.tab); setMode("view"); setSection(reset.section); setDesignView("3D"); setDesigns(reset.designs); setActiveDesign(reset.activeDesign); setDesignConfiguration(reset.designConfiguration); setDesignSnapshot(reset.designSnapshot); setVastuAnalysis(reset.vastuAnalysis); setShowZones(reset.showZones); setAssistEnabled(false); setAssistPreview(null); setAssistError(null); setCompareAId(reset.compareAId); setCompareBId(reset.compareBId); setCompareVisualId(reset.compareVisualId); setFullscreen3D(reset.fullscreen3D); setInspectorCollapsed(reset.inspectorCollapsed); setSourceCollapsed(false); setDesignError(null); setRecoveryMessage(null); setDesignBusy(false); if (inputRef.current) inputRef.current.value = "";
   };
-  const beginAnotherPlan = () => {
-    if (!confirmDiscardForNewFile(dirty, designDirty, window.confirm)) return;
-    resetPlan(); setStartView("home"); setStartError(null);
-  };
+  const beginAnotherPlan = () => { planGeneration.current += 1; setStartView("home"); setStartError(null); };
   const chooseFile = (file?: File) => {
     if (!file) return;
     if (!confirmDiscardForNewFile(dirty, designDirty, window.confirm)) { if (inputRef.current) inputRef.current.value = ""; return; }
@@ -108,7 +123,7 @@ export default function Workspace() {
   };
   const acceptPlan = async (payload: UploadResult, generation: number) => {
     if (generation !== planGeneration.current) return;
-    setResult(payload); setHistory(initialHistory(payload.structure)); setSavedSnapshot(JSON.stringify(payload.structure)); setStatus("complete"); setTab("Reconstruction"); setStartView("workspace"); localStorage.setItem(STORAGE_KEY, JSON.stringify(payload.plan)); await loadDesignState(payload.plan.id, payload.structure);
+    setResult(payload); setHistory(initialHistory(payload.structure)); setSavedSnapshot(JSON.stringify(payload.structure)); setSelection(null); setDesigns([]); setActiveDesign(null); setDesignConfiguration(defaultDesignConfiguration(payload.structure)); setDesignSnapshot(""); setVastuAnalysis(null); setShowZones(false); setAssistEnabled(false); setStatus("complete"); setTab("Reconstruction"); setSection("Structure"); setStartView("workspace"); localStorage.setItem(STORAGE_KEY, JSON.stringify(payload.plan)); await loadDesignState(payload.plan.id, payload.structure);
   };
   const process = async (file = selectedFile) => {
     if (!file) return; const generation = planGeneration.current; setStatus("processing"); setError(null);
@@ -116,19 +131,23 @@ export default function Workspace() {
     catch (reason) { if (generation === planGeneration.current) { setStatus("error"); setError(reason instanceof Error ? reason.message : "Unexpected processing error."); } }
   };
   const useSample = async (name: string) => {
-    const generation = planGeneration.current; setStartBusy(true); setStartError(null);
+    if (!confirmDiscardForNewFile(dirty, designDirty, window.confirm)) return;
+    const generation = ++planGeneration.current; setStartBusy(true); setStartError(null);
     try { const file = await samplePlanFile(name); if (generation !== planGeneration.current) return; setSelectedFile(file); setPreviewUrl(URL.createObjectURL(file)); setStartView("upload"); await process(file); }
     catch (reason) { if (generation === planGeneration.current) setStartError(reason instanceof Error ? reason.message : "Sample plan could not be opened."); }
     finally { if (generation === planGeneration.current) setStartBusy(false); }
   };
-  const useStarter = async (kind: StarterKind) => {
-    const generation = planGeneration.current; setStartBusy(true); setStartError(null);
-    try { await acceptPlan(await createStarterPlan(kind), generation); }
+  const useStarter = async (kind: StarterKind, dimensions?: BlankDimensions) => {
+    if (starterEntryView(kind) === "blank_setup" && !dimensions) { setStartError(null); setStartView("blank_setup"); return; }
+    if (!confirmDiscardForNewFile(dirty, designDirty, window.confirm)) return;
+    const generation = ++planGeneration.current; setStartBusy(true); setStartError(null);
+    try { await acceptPlan(await createStarterPlan(kind, dimensions), generation); }
     catch (reason) { if (generation === planGeneration.current) setStartError(reason instanceof Error ? reason.message : "Starter plan could not be opened."); }
     finally { if (generation === planGeneration.current) setStartBusy(false); }
   };
-  const commit = (next: Structure) => setHistory((current) => commitHistory(current, next));
-  const save = async () => { if (!result || !structure || !dirty) return; setStatus("saving"); setError(null); try { const stored = await saveStructure(result.plan.id, structure); setHistory((current) => ({ ...current, present: cloneStructure(stored) })); setSavedSnapshot(JSON.stringify(stored)); setStatus("complete"); } catch (reason) { setStatus("error"); setError(reason instanceof Error ? reason.message : "The structure could not be saved."); } };
+  const commit = (next: Structure) => { setHistory((current) => commitHistory(current, next)); setVastuAnalysis(null); };
+  const save = async (): Promise<boolean> => { if (!result || !structure) return false; if (!dirty) return true; setStatus("saving"); setError(null); try { const stored = await saveStructure(result.plan.id, structure); setHistory((current) => ({ ...current, present: cloneStructure(stored) })); setSavedSnapshot(JSON.stringify(stored)); setStatus("complete"); return true; } catch (reason) { setStatus("error"); setError(reason instanceof Error ? reason.message : "The structure could not be saved."); return false; } };
+  const viewFullAnalysis = async () => { if (dirty && !await save()) return; setSection("Vastu"); };
   const updateHeight = (height: number) => {
     if (!structure || !Number.isFinite(height) || height < .5 || height > 10) return;
     if (designConfiguration) { const next = cloneConfiguration(designConfiguration); next.wall_height = height; updateDesignConfiguration(next); return; }
@@ -158,9 +177,13 @@ export default function Workspace() {
   };
   const loadDesign = (id: string) => { const target = designs.find((item) => item.id === id); if (!target || (designDirty && !window.confirm("Switch designs and discard unsaved design changes?"))) return; activateDesign(target); };
   const updateDesignConfiguration = (configuration: DesignConfiguration) => {
-    setDesignConfiguration(configuration); setVastuAnalysis(null);
-    setActiveDesign((current) => current ? { ...current, latest_analysis: null } : current);
-    setDesigns((items) => items.map((item) => item.id === activeDesign?.id ? { ...item, latest_analysis: null } : item));
+    const affectsVastu = configuration.orientation !== designConfiguration?.orientation || JSON.stringify(configuration.room_semantics) !== JSON.stringify(designConfiguration?.room_semantics);
+    setDesignConfiguration(configuration);
+    if (affectsVastu) {
+      setVastuAnalysis(null);
+      setActiveDesign((current) => current ? { ...current, latest_analysis: null } : current);
+      setDesigns((items) => items.map((item) => item.id === activeDesign?.id ? { ...item, latest_analysis: null } : item));
+    }
   };
   const analyze = async () => { if (!activeDesign || !designConfiguration?.orientation && designConfiguration?.orientation !== 0) return; const saved = designDirty ? await saveActiveDesign() : activeDesign; if (!saved) return; setDesignBusy(true); try { const analysis = await runVastuAnalysis(saved.id); setVastuAnalysis(analysis); setActiveDesign((current) => current ? { ...current, latest_analysis: analysis } : current); setDesigns((items) => items.map((item) => item.id === saved.id ? { ...item, latest_analysis: analysis } : item)); } catch (reason) { setDesignError(reason instanceof Error ? reason.message : "Analysis failed."); } finally { setDesignBusy(false); } };
   const reportRenderer = (fps: number, frameTime: number) => { void sendSystemTelemetry({ fps, frame_time_ms: frameTime, renderer_health: fps < 24 ? "SLOW" : "HEALTHY" }).then(setSystemState).catch(() => undefined); };
@@ -216,12 +239,13 @@ export default function Workspace() {
     finally { setSimulationBusy(false); }
   };
 
-  const is3D = Boolean(structure) && (section === "Design Studio" || section === "Compare" || (section === "Structure" && tab === "3D View"));
+  const is3D = Boolean(structure) && ((section === "Design Studio" && designView === "3D") || section === "Compare" || (section === "Structure" && tab === "3D View"));
   const showInspector = Boolean(structure) && (section === "Design Studio" || (section === "Structure" && (tab === "Reconstruction" || tab === "3D View")));
   const currentAnalysis = vastuAnalysis;
   const effectiveWallHeight = designConfiguration?.wall_height ?? structure?.wall_height;
 
-  if (startView === "home" || startView === "samples" || startView === "starters") return <div id="workspace"><StartExperience choice={startView} busy={startBusy} error={startError} onUpload={() => setStartView("upload")} onChoice={setStartView} onSample={(name) => { void useSample(name); }} onStarter={(kind) => { void useStarter(kind); }} /></div>;
+  if (startView === "home" || startView === "samples" || startView === "starters") return <div id="workspace"><StartExperience choice={startView} busy={startBusy} error={startError} onUpload={() => { if (confirmDiscardForNewFile(dirty, designDirty, window.confirm)) { resetPlan(); setStartView("upload"); } }} onChoice={setStartView} onSample={(name) => { void useSample(name); }} onStarter={(kind) => { void useStarter(kind); }} /></div>;
+  if (startView === "blank_setup") return <div id="workspace"><BlankSpaceSetup busy={startBusy} error={startError} onBack={() => { setStartError(null); setStartView("starters"); }} onCreate={(dimensions) => { void useStarter("blank", dimensions); }} /></div>;
 
   return <section id="workspace" className={`workspace ${is3D ? "is-3d-workspace" : ""} ${fullscreen3D ? "fullscreen-3d" : ""}`} aria-labelledby="workspace-title">
     <div className="workspace-heading"><div><p className="eyebrow">Spatial design workspace</p><h2 id="workspace-title">Correct. Design. Compare. Understand.</h2></div><button className="secondary-button" type="button" onClick={beginAnotherPlan}>Start another plan</button>{structure && structure.processing_metadata.pipeline_version !== "starter-1" && <div className="confidence-card"><span>Overall confidence</span><strong>{Math.round(structure.overall_confidence * 100)}%</strong><small>Heuristic estimate</small></div>}</div>
@@ -231,14 +255,25 @@ export default function Workspace() {
         <div className="control-panel-content"><h3>Source plan</h3><div className={`drop-zone ${selectedFile || result ? "has-file" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); chooseFile(event.dataTransfer.files[0]); }}><span className="upload-icon" aria-hidden="true">↥</span><strong>{selectedFile?.name ?? result?.plan.original_name ?? "Drop a floor plan here"}</strong><span>{selectedFile ? `${(selectedFile.size / 1024).toFixed(1)} KB` : result ? "Saved plan restored" : "PNG or JPG · up to 10 MB"}</span><button className="file-button" type="button" onClick={() => inputRef.current?.click()}>{selectedFile || result ? "Choose another" : "Choose file"}</button><input ref={inputRef} className="visually-hidden" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" onChange={(event) => chooseFile(event.target.files?.[0])} /></div>
         <button className="primary-button process-button" disabled={!selectedFile || status === "processing"} onClick={() => { void process(); }}>{status === "processing" ? <><span className="spinner" /> Processing plan…</> : "Detect structure"}</button>
         <div className={`status-box ${status}`} role="status" aria-live="polite"><span className="status-dot" /><div><strong>{status === "idle" ? "Ready" : status === "selected" ? "New plan selected" : status === "processing" ? "Processing" : status === "saving" ? "Saving" : status === "complete" ? dirty ? "Unsaved structure" : "Structure saved" : "Needs attention"}</strong><p>{status === "idle" ? "Select a supported clean floor plan." : status === "selected" ? "Click Detect Structure to process this plan." : status === "processing" ? "Running the floor-plan processing pipeline." : status === "saving" ? "Validating and persisting the structural model." : status === "complete" ? dirty ? "Save to persist corrected geometry." : "Structural model is persisted." : error}</p></div></div>
-        {structure && <><div className="candidate-counts"><div><strong>{structure.walls.length}</strong><span>Walls</span></div><div><strong>{structure.rooms.length}</strong><span>Rooms</span></div><div><strong>{structure.openings.length}</strong><span>Openings</span></div></div><div className="history-actions"><button disabled={!history.past.length} onClick={() => setHistory(undoHistory)}>Undo</button><button disabled={!history.future.length} onClick={() => setHistory(redoHistory)}>Redo</button><button className="save-button" disabled={!dirty || status === "saving"} onClick={save}>Save structure</button></div>{effectiveWallHeight !== undefined && <label className="height-control"><span>Structural wall height <strong>{effectiveWallHeight.toFixed(1)} m</strong></span><input type="range" min="2" max="5" step="0.1" value={effectiveWallHeight} onChange={(event) => updateHeight(Number(event.target.value))} /></label>}</>}
+        {structure && <><div className="candidate-counts"><div><strong>{structure.walls.length}</strong><span>Walls</span></div><div><strong>{structure.rooms.length}</strong><span>Rooms</span></div><div><strong>{structure.openings.length}</strong><span>Openings</span></div></div><div className="history-actions"><button disabled={!history.past.length} onClick={() => { setHistory(undoHistory); setVastuAnalysis(null); }}>Undo</button><button disabled={!history.future.length} onClick={() => { setHistory(redoHistory); setVastuAnalysis(null); }}>Redo</button><button className="save-button" disabled={!dirty || status === "saving"} onClick={save}>Save structure</button></div>{effectiveWallHeight !== undefined && <label className="height-control"><span>Structural wall height <strong>{effectiveWallHeight.toFixed(1)} m</strong></span><input type="range" min="2" max="5" step="0.1" value={effectiveWallHeight} onChange={(event) => updateHeight(Number(event.target.value))} /></label>}</>}
         {structure && ["Design Studio", "Vastu", "Compare"].includes(section) && <DesignManager designs={designs} active={activeDesign} configuration={designConfiguration} dirty={designDirty} busy={designBusy} onLoad={loadDesign} onNameChange={(name) => setActiveDesign((current) => current ? { ...current, name } : current)} onConfigurationChange={updateDesignConfiguration} onCreate={createNewDesign} onSave={() => { void saveActiveDesign(); }} onDuplicate={duplicateActiveDesign} onDelete={removeActiveDesign} />}
         {designError && <p className="design-error" role="alert">{designError}</p>}</div>
       </aside>
       <div className="canvas-panel">
         <WorkspaceNavigation section={section} hasStructure={Boolean(structure)} onSelect={setSection} />
-        {section === "Structure" && <><div className="tabs" role="tablist" aria-label="Plan views">{(["Original", "Processed", "Reconstruction", "3D View"] as Tab[]).map((item) => <button key={item} role="tab" aria-selected={tab === item} disabled={item === "Processed" ? !result || result.plan.media_type.startsWith("application/") : item === "Original" ? result?.plan.media_type.startsWith("application/") : !structure} onClick={() => setTab(item)}>{item}</button>)}</div>{tab === "Reconstruction" && structure && <div className="mode-toolbar"><div className="segmented-control"><button aria-pressed={mode === "view"} onClick={() => setMode("view")}>View</button><button aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>Edit Structure</button></div>{mode === "edit" && <span>Drag selected wall endpoints or openings. Numeric controls are in the inspector.</span>}</div>}<div className={`editor-layout ${showInspector ? "with-inspector" : ""} ${is3D ? "three-layout" : ""} ${is3D && inspectorCollapsed ? "inspector-collapsed" : ""}`}><div className={`plan-canvas ${tab === "3D View" ? "three-host" : ""}`} role="tabpanel">{!previewUrl && !structure ? <div className="empty-canvas"><span aria-hidden="true">⌗</span><strong>Your floor plan will appear here</strong><p>Use a clear, top-down, single-floor residential plan.</p></div> : tab === "Original" ? previewUrl ? <img src={previewUrl} alt="Uploaded original floor plan" /> : <div className="empty-canvas"><strong>Original preview is unavailable after reload.</strong><p>The saved structural model remains available.</p></div> : tab === "Processed" && result ? <img className="processed-image" src={artifactUrl(result.plan.id, "threshold")} alt="Backend threshold processing result" /> : tab === "Reconstruction" && structure ? <PlanSvg structure={structure} editable={mode === "edit"} selection={selection} onSelect={setSelection} onChange={commit} orientation={designConfiguration?.orientation} design={designConfiguration} /> : tab === "3D View" && structure ? <RendererBoundary onFailure={rendererFailed} onReturnTo2D={() => setTab("Reconstruction")}><ThreeViewer structure={structure} design={designConfiguration ?? undefined} selection={selection} onSelect={setSelection} fullscreen={fullscreen3D} onToggleFullscreen={() => setFullscreen3D((value) => !value)} renderingQuality={systemState?.rendering_quality} available={!rendererUnavailable} onTelemetry={reportRenderer} /></RendererBoundary> : null}</div>{showInspector && structure && <StructureInspector structure={structure} selection={selection} onSelect={setSelection} onChange={commit} editable={mode === "edit" && tab === "Reconstruction"} collapsed={is3D && inspectorCollapsed} onToggle={is3D ? () => setInspectorCollapsed((value) => !value) : undefined} />}</div></>}
-        {section === "Design Studio" && structure && designConfiguration && <div className="design-studio-content"><div className={`editor-layout with-inspector three-layout ${inspectorCollapsed ? "inspector-collapsed" : ""}`}><div className="plan-canvas three-host" role="tabpanel"><RendererBoundary onFailure={rendererFailed} onReturnTo2D={() => { setSection("Structure"); setTab("Reconstruction"); }}><ThreeViewer structure={structure} design={designConfiguration} selection={selection} onSelect={setSelection} fullscreen={fullscreen3D} onToggleFullscreen={() => setFullscreen3D((value) => !value)} renderingQuality={systemState?.rendering_quality} available={!rendererUnavailable} onTelemetry={reportRenderer} /></RendererBoundary></div><StructureInspector structure={structure} selection={selection} onSelect={setSelection} onChange={commit} editable={false} collapsed={inspectorCollapsed} onToggle={() => setInspectorCollapsed((value) => !value)} design={designConfiguration} onDesignChange={updateDesignConfiguration} designMode /></div><RoomAssignments structure={structure} configuration={designConfiguration} selection={selection} onSelect={setSelection} onChange={updateDesignConfiguration} /></div>}
+        {section === "Structure" && structure && <div className="structure-export"><button type="button" className="secondary-button" onClick={() => { setDownloadError(null); void downloadPlanPng(structure, designConfiguration).catch((reason) => setDownloadError(reason instanceof Error ? reason.message : "The plan could not be downloaded.")); }}>Download 2D Plan</button>{downloadError && <p role="alert" className="design-error">{downloadError}</p>}</div>}
+        {section === "Structure" && <><div className="tabs" role="tablist" aria-label="Plan views">{(["Original", "Processed", "Reconstruction", "3D View"] as Tab[]).map((item) => <button key={item} role="tab" aria-selected={tab === item} disabled={item === "Processed" ? !result || result.plan.media_type.startsWith("application/") : item === "Original" ? result?.plan.media_type.startsWith("application/") : !structure} onClick={() => setTab(item)}>{item}</button>)}</div>{tab === "Reconstruction" && structure && <div className="mode-toolbar"><div className="segmented-control"><button aria-pressed={mode === "view"} onClick={() => setMode("view")}>View</button><button aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>Edit Structure</button></div>{mode === "edit" && <span>Drag selected wall endpoints or openings. Numeric controls are in the inspector.</span>}</div>}<div className={`editor-layout ${showInspector ? "with-inspector" : ""} ${is3D ? "three-layout" : ""} ${is3D && inspectorCollapsed ? "inspector-collapsed" : ""}`}><div className={`plan-canvas ${tab === "3D View" ? "three-host" : ""}`} role="tabpanel">{!previewUrl && !structure ? <div className="empty-canvas"><span aria-hidden="true">⌗</span><strong>Your floor plan will appear here</strong><p>Use a clear, top-down, single-floor residential plan.</p></div> : tab === "Original" ? previewUrl ? <img src={previewUrl} alt="Uploaded original floor plan" /> : <div className="empty-canvas"><strong>Original preview is unavailable after reload.</strong><p>The saved structural model remains available.</p></div> : tab === "Processed" && result ? <img className="processed-image" src={artifactUrl(result.plan.id, "threshold")} alt="Backend threshold processing result" /> : tab === "Reconstruction" && structure ? <PlanSvg structure={structure} editable={mode === "edit"} selection={selection} onSelect={setSelection} onChange={commit} orientation={designConfiguration?.orientation} showZones={assistEnabled} preferredZones={selectedRoomGuidance(assistPreview, selection, designConfiguration!, structure)?.rule?.preferred_zones ?? []} design={designConfiguration} /> : tab === "3D View" && structure ? <RendererBoundary onFailure={rendererFailed} onReturnTo2D={() => setTab("Reconstruction")}><ThreeViewer structure={structure} design={designConfiguration ?? undefined} selection={selection} onSelect={setSelection} fullscreen={fullscreen3D} onToggleFullscreen={() => setFullscreen3D((value) => !value)} renderingQuality={systemState?.rendering_quality} available={!rendererUnavailable} onTelemetry={reportRenderer} /></RendererBoundary> : null}</div>{showInspector && structure && <StructureInspector structure={structure} selection={selection} onSelect={setSelection} onChange={commit} editable={mode === "edit" && tab === "Reconstruction"} design={designConfiguration ?? undefined} onDesignChange={updateDesignConfiguration} collapsed={is3D && inspectorCollapsed} onToggle={is3D ? () => setInspectorCollapsed((value) => !value) : undefined} />}</div>{designConfiguration && <VastuAssist structure={structure!} configuration={designConfiguration} selection={selection} enabled={assistEnabled} onEnabled={(value) => { setAssistEnabled(value); if (value) setTab("Reconstruction"); }} preview={assistPreview} busy={assistBusy} error={assistError} onConfigurationChange={updateDesignConfiguration} onSelect={setSelection} onViewFull={() => { void viewFullAnalysis(); }} />}</>}
+        {section === "Design Studio" && structure && designConfiguration && <div className="design-studio-content">
+          <div className="mode-toolbar"><div className="segmented-control" role="group" aria-label="Design view"><button aria-pressed={designView === "2D"} onClick={() => { setDesignView("2D"); setFullscreen3D(false); }}>2D Plan</button><button aria-pressed={designView === "3D"} onClick={() => setDesignView("3D")}>3D View</button></div><span>Select a room for furniture or a wall for wall decor.</span></div>
+          <div className={`editor-layout with-inspector ${designView === "3D" ? "three-layout" : ""} ${designView === "3D" && inspectorCollapsed ? "inspector-collapsed" : ""}`}>
+            <div className={`plan-canvas ${designView === "3D" ? "three-host" : ""}`} role="tabpanel">{designView === "3D"
+              ? <><RendererBoundary onFailure={rendererFailed} onReturnTo2D={() => setDesignView("2D")}><ThreeViewer structure={structure} design={designConfiguration} selection={selection} onSelect={setSelection} fullscreen={fullscreen3D} onToggleFullscreen={() => setFullscreen3D((value) => !value)} renderingQuality={systemState?.rendering_quality} available={!rendererUnavailable} onTelemetry={reportRenderer} /></RendererBoundary><PropQuickEdit structure={structure} configuration={designConfiguration} selection={selection} onChange={updateDesignConfiguration} onSelect={setSelection} /></>
+              : <PlanSvg structure={structure} design={designConfiguration} selection={selection} onSelect={setSelection} propEditable onDesignChange={updateDesignConfiguration} />}</div>
+            <StructureInspector structure={structure} selection={selection} onSelect={setSelection} onChange={commit} editable={false} collapsed={designView === "3D" && inspectorCollapsed} onToggle={designView === "3D" ? () => setInspectorCollapsed((value) => !value) : undefined} design={designConfiguration} onDesignChange={updateDesignConfiguration} designMode />
+          </div>
+          <HomePropsPanel structure={structure} configuration={designConfiguration} selection={selection} onSelect={setSelection} onChange={updateDesignConfiguration} onShow2D={() => setDesignView("2D")} />
+          <RoomAssignments structure={structure} configuration={designConfiguration} selection={selection} onSelect={setSelection} onChange={updateDesignConfiguration} />
+        </div>}
         {section === "Vastu" && structure && activeDesign && designConfiguration && <VastuPanel structure={structure} design={activeDesign} configuration={designConfiguration} analysis={currentAnalysis} busy={designBusy} showZones={showZones} onShowZones={setShowZones} onConfigurationChange={updateDesignConfiguration} onRun={analyze} />}
         {section === "Compare" && structure && <ComparePanel structure={structure} designs={designs} designAId={compareAId} designBId={compareBId} visualId={compareVisualId} selection={selection} fullscreen={fullscreen3D} renderingQuality={systemState?.rendering_quality} rendererAvailable={!rendererUnavailable} onTelemetry={reportRenderer} onFailure={rendererFailed} onDesignA={(id) => { setCompareAId(id); setCompareVisualId(id); }} onDesignB={setCompareBId} onVisual={setCompareVisualId} onSelect={setSelection} onToggleFullscreen={() => setFullscreen3D((value) => !value)} onReturnTo2D={() => { setSection("Structure"); setTab("Reconstruction"); }} />}
         {section === "Control Center" && <ControlCenter state={systemState} metrics={systemMetrics} history={adaptations} error={systemError} rendererUnavailable={rendererUnavailable} onRetryRenderer={retryRenderer} />}

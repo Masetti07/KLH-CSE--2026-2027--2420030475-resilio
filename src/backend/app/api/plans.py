@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.database.session import get_session
 from app.schemas.plan import PlanDetail, StructuralPlan, UploadResult
 from app.services.plan_service import ControlledProcessingFailure, PlanNotFoundError, PlanService, UploadValidationError
-from app.services.starter_plans import StarterKind
+from app.services.starter_plans import BlankDimensions, StarterKind
 
 
 router = APIRouter(prefix="/api/plans", tags=["plans"])
@@ -28,8 +28,10 @@ def service(session: Session = Depends(get_session)) -> PlanService:
 
 
 @router.post("/starters/{kind}", response_model=UploadResult, status_code=status.HTTP_201_CREATED)
-def create_starter(kind: StarterKind, plan_service: PlanService = Depends(service)) -> UploadResult:
-    return plan_service.create_starter(kind)
+def create_starter(kind: StarterKind, dimensions: BlankDimensions | None = None, plan_service: PlanService = Depends(service)) -> UploadResult:
+    if kind != "blank" and dimensions is not None:
+        raise HTTPException(status_code=400, detail="Dimensions are only supported for a blank plan.")
+    return plan_service.create_starter(kind, dimensions)
 
 
 @router.get("/samples/{name}", response_class=FileResponse)

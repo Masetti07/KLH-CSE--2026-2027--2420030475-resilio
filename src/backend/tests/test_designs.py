@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw
 
 from app.schemas.design import DesignConfiguration, RoomSemantic, VastuRule
 from app.schemas.plan import Dimensions, NormalizedDimensions, Point, ProcessingMetadata, Room, StructuralPlan, Wall
-from app.services.vastu import analyze_design, directional_zone, north_aligned_point
+from app.services.vastu import VASTU_RULES, analyze_design, directional_zone, north_aligned_point
 
 
 def plan_bytes() -> bytes:
@@ -76,6 +76,42 @@ def test_door_and_window_style_persistence(client, design):
     reloaded = client.get(f"/api/designs/{design['id']}").json()["configuration"]
     assert reloaded["door_configurations"][opening_id]["style"] == "double"
     assert reloaded["window_configurations"][opening_id]["style"] == "floor_to_ceiling"
+
+
+def test_home_props_round_trip_and_vastu_analysis_unchanged(client, design):
+    structure = client.get(f"/api/plans/{design['plan_id']}/structure").json()
+    room_id = structure["rooms"][0]["id"]
+    wall_id = structure["walls"][0]["id"]
+    configuration = deepcopy(design["configuration"])
+    configuration["orientation"] = 0
+    baseline = client.put(f"/api/designs/{design['id']}", json={"configuration": configuration})
+    assert baseline.status_code == 200
+    analysis = client.post(f"/api/designs/{design['id']}/vastu-analysis")
+    assert analysis.status_code == 200
+    configuration["props"] = [
+        {"id": "prop-1", "type": "bed", "placement_type": "room", "room_id": room_id, "wall_id": None, "position": {"x": .5, "y": .5}, "rotation": 45, "wall_offset": .5},
+        {"id": "prop-2", "type": "painting", "placement_type": "wall", "room_id": None, "wall_id": wall_id, "position": {"x": .5, "y": .2}, "rotation": 0, "wall_offset": .4},
+    ]
+    saved = client.put(f"/api/designs/{design['id']}", json={"configuration": configuration})
+    assert saved.status_code == 200
+    loaded = client.get(f"/api/designs/{design['id']}").json()
+    assert loaded["configuration"]["props"] == configuration["props"]
+    assert loaded["latest_analysis"] == analysis.json()
+    duplicate = client.post(f"/api/designs/{design['id']}/duplicate", json={})
+    assert duplicate.status_code == 201
+    assert duplicate.json()["configuration"]["props"] == configuration["props"]
+
+
+def test_home_props_reject_bad_placement_duplicate_and_stale_references(client, design):
+    configuration = deepcopy(design["configuration"])
+    prop = {"id": "prop-1", "type": "clock", "placement_type": "wall", "room_id": None, "wall_id": "missing", "position": {"x": .5, "y": .5}, "rotation": 0, "wall_offset": .5}
+    configuration["props"] = [prop]
+    assert client.put(f"/api/designs/{design['id']}", json={"configuration": configuration}).status_code == 409
+    configuration["props"] = [{**prop, "placement_type": "room"}]
+    assert client.put(f"/api/designs/{design['id']}", json={"configuration": configuration}).status_code == 422
+    wall_id = next(iter(configuration["wall_appearances"]))
+    configuration["props"] = [{**prop, "wall_id": wall_id}] * 2
+    assert client.put(f"/api/designs/{design['id']}", json={"configuration": configuration}).status_code == 422
 
 
 def test_duplicate_design_preserves_configuration(client, design):
@@ -186,6 +222,59 @@ def test_vastu_uses_current_room_type_after_semantic_change():
     assert before.rule_results[0].result == "not_applicable"
     assert after.rule_results[0].result == "satisfied"
     assert after.rule_results[0].room_name == "Pooja Room"
+
+
+def test_configured_bathroom_rule_evaluates_assigned_room_only():
+    structure = analysis_structure()
+    structure.rooms[0].polygon = [Point(x=.7, y=.4), Point(x=.95, y=.4), Point(x=.95, y=.6), Point(x=.7, y=.6)]
+    config = DesignConfiguration(orientation=0, room_semantics={"room-ne": RoomSemantic(name="Bathroom", room_type="bathroom")})
+    analysis = analyze_design("design", config, structure)
+    bathroom = next(item for item in analysis.rule_results if item.rule_id == "TVR-BATHROOM-01")
+    assert bathroom.room_id == "room-ne"
+    assert bathroom.detected_zone == "east"
+    assert bathroom.result == "satisfied"
+    assert analysis.score == 100
+    absent = analyze_design("design", DesignConfiguration(orientation=0), structure)
+    assert next(item for item in absent.rule_results if item.rule_id == "TVR-BATHROOM-01").result == "not_applicable"
+
+
+def test_vastu_assist_preview_reuses_rules_and_updates_unsaved_geometry(client):
+    structure = analysis_structure().model_dump(mode="json")
+    configuration = DesignConfiguration(orientation=0, room_semantics={"room-ne": RoomSemantic(name="Kitchen", room_type="kitchen")}).model_dump(mode="json")
+    request = {"structure": structure, "configuration": configuration}
+    first = client.post("/api/vastu/assist-preview", json=request)
+    assert first.status_code == 200
+    preview = first.json()
+    assert [rule["id"] for rule in preview["rules"]] == [rule.id for rule in VASTU_RULES]
+    expected = analyze_design("preview", DesignConfiguration.model_validate(configuration), analysis_structure())
+    assert preview["analysis"]["rule_results"] == [item.model_dump(mode="json") for item in expected.rule_results]
+    kitchen = next(item for item in preview["analysis"]["rule_results"] if item["room_id"] == "room-ne")
+    assert kitchen["detected_zone"] == "north_east"
+    assert kitchen["result"] == "unsatisfied"
+
+    for point in request["structure"]["rooms"][0]["polygon"]:
+        point["y"] += .65
+    moved = client.post("/api/vastu/assist-preview", json=request)
+    assert moved.status_code == 200
+    moved_kitchen = next(item for item in moved.json()["analysis"]["rule_results"] if item["room_id"] == "room-ne")
+    assert moved_kitchen["detected_zone"] == "south_east"
+    assert moved_kitchen["result"] == "satisfied"
+
+    request["configuration"]["props"] = [{"id": "decor", "type": "bed", "placement_type": "room", "room_id": "room-ne", "wall_id": None, "position": {"x": .8, "y": .8}, "rotation": 0, "wall_offset": .5}]
+    furnished = client.post("/api/vastu/assist-preview", json=request)
+    assert furnished.status_code == 200
+    assert furnished.json()["analysis"]["rule_results"] == moved.json()["analysis"]["rule_results"]
+    assert furnished.json()["analysis"]["score"] == moved.json()["analysis"]["score"]
+    request["configuration"]["orientation"] = 45
+    assert client.post("/api/vastu/assist-preview", json=request).status_code == 422
+
+
+def test_full_vastu_analysis_route_remains_available(client, design):
+    assert client.post(f"/api/designs/{design['id']}/vastu-analysis").status_code == 200
+    assert client.get(f"/api/designs/{design['id']}").json()["latest_analysis"] is not None
+    structure = client.get(f"/api/plans/{design['plan_id']}/structure").json()
+    assert client.put(f"/api/plans/{design['plan_id']}/structure", json=structure).status_code == 200
+    assert client.get(f"/api/designs/{design['id']}").json()["latest_analysis"] is None
 
 
 def test_unsatisfied_rule_and_score():

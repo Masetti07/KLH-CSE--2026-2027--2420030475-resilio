@@ -1,10 +1,10 @@
-import type { AdaptationEvent, Design, DesignConfiguration, SimulationResponse, SimulationScenario, Structure, SystemMetrics, SystemState, UploadResult, VastuAnalysis } from "./types";
-import type { StarterKind } from "./utils/startPlans";
+import type { AdaptationEvent, Design, DesignConfiguration, SimulationResponse, SimulationScenario, Structure, SystemMetrics, SystemState, UploadResult, VastuAnalysis, VastuAssistPreview } from "./types";
+import type { BlankDimensions, StarterKind } from "./utils/startPlans";
 
 export const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
 
-export async function createStarterPlan(kind: StarterKind): Promise<UploadResult> {
-  const response = await fetch(`${API_BASE}/api/plans/starters/${kind}`, { method: "POST" });
+export async function createStarterPlan(kind: StarterKind, dimensions?: BlankDimensions): Promise<UploadResult> {
+  const response = await fetch(`${API_BASE}/api/plans/starters/${kind}`, { method: "POST", ...(dimensions ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(dimensions) } : {}) });
   if (!response.ok) throw new Error("The starter plan could not be created.");
   return response.json() as Promise<UploadResult>;
 }
@@ -98,6 +98,10 @@ export async function deleteDesign(designId: string): Promise<void> {
 
 export async function runVastuAnalysis(designId: string): Promise<VastuAnalysis> {
   return jsonResponse(await fetch(`${API_BASE}/api/designs/${designId}/vastu-analysis`, { method: "POST" }), "Traditional Vastu Rule Analysis could not be completed.");
+}
+
+export async function previewVastuAssist(structure: Structure, configuration: DesignConfiguration, signal?: AbortSignal): Promise<VastuAssistPreview> {
+  return jsonResponse(await fetch(`${API_BASE}/api/vastu/assist-preview`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ structure, configuration }), signal }), "Traditional Vastu Assist could not be updated.");
 }
 
 export async function sendSystemTelemetry(payload: { fps?: number; frame_time_ms?: number; renderer_health?: string; autosave_health?: string; session_corrupted?: boolean }): Promise<SystemState> {

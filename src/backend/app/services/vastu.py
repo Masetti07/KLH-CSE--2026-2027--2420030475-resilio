@@ -13,6 +13,7 @@ VASTU_RULES: tuple[VastuRule, ...] = (
     VastuRule(id="TVR-ENTRANCE-01", title="Entrance directional preference", room_type="entrance", preferred_zones=["north", "north_east", "east"], severity="advisory", description="Traditional guidance often prefers an entrance in a north, north-east, or east zone.", source_reference="docs/vastu/rules.md#tvr-entrance-01"),
     VastuRule(id="TVR-POOJA-01", title="Pooja or prayer room directional preference", room_type="pooja_room", preferred_zones=["north_east"], severity="info", description="Traditional guidance commonly associates a pooja or prayer room with the north-east zone.", source_reference="docs/vastu/rules.md#tvr-pooja-01"),
     VastuRule(id="TVR-STUDY-01", title="Study directional preference", room_type="study", preferred_zones=["west"], severity="info", description="The documented Shodasa-Mandira-Chakra translation places study in the west zone.", source_reference="docs/vastu/rules.md#tvr-study-01"),
+    VastuRule(id="TVR-BATHROOM-01", title="Bathroom directional preference", room_type="bathroom", preferred_zones=["east"], severity="info", description="The documented AWGP traditional guidance places a bathing room toward the east; guidance for combined bathrooms and toilets varies.", source_reference="docs/vastu/rules.md#tvr-bathroom-01"),
 )
 
 
