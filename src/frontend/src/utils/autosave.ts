@@ -1,4 +1,5 @@
 import type { DesignConfiguration, Structure, UploadResult } from "../types";
+import { HOME_PROP_CATALOG } from "./homeProps";
 
 export const SNAPSHOT_VERSION = 1;
 export const SNAPSHOT_LIMIT = 3;
@@ -11,7 +12,7 @@ export type WorkingSnapshot = {
 };
 
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
-const propTypes = new Set(["clock", "painting", "bed", "sofa", "table", "armchair", "cupboard", "flower_vase"]);
+const propTypes = new Set<string>(HOME_PROP_CATALOG.map((prop) => prop.type));
 const validProp = (value: unknown): boolean => {
   if (!record(value) || typeof value.id !== "string" || !propTypes.has(String(value.type)) || !record(value.position)) return false;
   const isWall = value.type === "clock" || value.type === "painting";

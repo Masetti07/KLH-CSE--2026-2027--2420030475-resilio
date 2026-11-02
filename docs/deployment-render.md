@@ -1,131 +1,113 @@
-# Render native Python demo (preparation only)
+# Public guest portfolio deployment
 
-No service has been deployed. Shared-password access is intended only for a small,
-trusted mentor group, not an isolated multi-user application. No Docker changes are needed.
+## Confirmed fetch failure
 
-## Backend configuration
+The inspected Cloudflare bundle `/assets/index-CJMGPAVR.js` contained
+`const ci="http://127.0.0.1:8000"` before the authentication client. It calls the
+visitor's computer rather than Render. `VITE_API_URL` is the exact build-time
+variable; changing backend variables cannot repair an existing Vite bundle.
+Render `/api/auth/status` returned 200, `required:true`, and
+`Access-Control-Allow-Origin: https://resiliospace.pages.dev` when that Origin was
+sent. The inspected backend was reachable and CORS was correct; the frontend had
+an incorrect embedded API base and the previous mentor login experience.
 
-Create a Render **Web Service**, language **Python 3**, using the chosen repository.
+## Cloudflare Pages production configuration
 
-| Setting | Value |
-| --- | --- |
-| Root Directory | Leave blank (repository root) |
-| Build Command | `pip install -r src/backend/requirements.txt` |
-| Start Command | `uvicorn app.main:app --app-dir src/backend --host 0.0.0.0 --port $PORT --workers 1` |
-| Health Check Path | `/health` |
+- Root: `src/frontend`
+- Build: `npm ci && npm run build`
+- Output: `dist`
+- `NODE_VERSION=22`
+- `VITE_API_URL=https://resiliospace-api.onrender.com` (no `/api` suffix)
+- `VITE_GUEST_DEMO=true`
 
-Required service environment:
+Set variables for **Production**, not only Preview; rebuild after changing them.
+Keep SPA fallback to `index.html` and all furniture assets. No secrets belong in
+VITE variables. Production now defaults to guest mode and this HTTPS Render origin
+if unspecified. Local development retains localhost and the existing local flow;
+set VITE_GUEST_DEMO=true locally to exercise guest mode. Preview deployments need
+their exact frontend origins added to CORS.
+
+## Render native Python configuration
+
+- Root: leave blank (whole repository, including `data/`).
+- Build: `pip install -r src/backend/requirements.txt`
+- Start: `uvicorn app.main:app --app-dir src/backend --host 0.0.0.0 --port $PORT --workers 1`
+- Health check: `/health`
+- Leave PYTHON_VERSION unset: `.python-version` selects Python 3.12.
 
 ```text
 RESILIOSPACE_PUBLIC_DEMO=true
-RESILIOSPACE_DEMO_PASSWORD=<unique-strong-16-to-256-character-password>
-RESILIOSPACE_CORS_ORIGINS=https://your-project.pages.dev
+RESILIOSPACE_GUEST_DEMO=true
+RESILIOSPACE_CORS_ORIGINS=https://resiliospace.pages.dev
 RESILIOSPACE_SAMPLE_DIR=data
 RESILIOSPACE_RUNTIME_DIR=/tmp/resiliospace-runtime
 ```
 
-Replace the Pages hostname with the actual HTTPS origin, without a path. Additional
-origins may be comma-separated; preview deployments require their exact origins.
-Localhost development origins remain allowed. Credentials and wildcard origins are
-not enabled. CORS is a browser policy, not authentication.
+Remove the old RESILIOSPACE_DEMO_PASSWORD for this public service. Guest mode
+rejects password login even if it remains, and forces authentication on shared
+routes even if PUBLIC_DEMO is accidentally false. Use one worker/instance.
 
-The root `.python-version` selects the latest Python 3.12 patch supported by Render;
-leave `PYTHON_VERSION` unset so it does not override this selection. Keep the whole
-repository available: `data/` contains the three allowlisted sample plans. The
-existing sample-directory override and runtime-directory creation need no changes.
-Startup creates uploads/debug directories and SQLite under the writable runtime
-directory. One worker preserves the existing process-local adaptation state.
+## Guest isolation and security
 
-For the separately hosted frontend, set **build-time**
-`VITE_API_URL=https://your-backend.onrender.com` (no `/api` suffix), retain all public
-furniture assets, and use SPA fallback to `index.html`.
+The existing app opens immediately. Structures, designs/versions, analyses and
+processed images live in browser localStorage under `resiliospace:guest:v1:`;
+last-plan restoration uses a separate guest key. Existing validated working
+snapshots accept all 32 furniture types. Missing local IDs never fall back to
+server records, and guest design CRUD sends no record IDs to the backend.
+Different browser profiles have independent stores; tabs in the same profile share
+storage. This is not account-based isolation. Local storage is unencrypted and
+same-origin XSS could access it. Private browsing, cleared data and quotas can
+remove/prevent saves; errors are reported. Export important work.
 
-## Mentor access and demo restrictions
+Anonymous endpoints are restricted to:
 
-Set the password as a secret environment value in the Render backend dashboard.
-Do not commit the value, put it in a frontend/VITE variable, or share it in a URL.
-Send mentors the HTTPS frontend URL and the password separately. They enter it on
-the Mentor demo screen; successful login issues a random 30-minute bearer token.
-Tokens stay only in browser memory, are validated against expiring server-side
-sessions on every request, and are never placed in image URLs. Reloading the page,
-server restart, expiry, or Lock demo requires login again. Lock demo revokes the
-current token when the server can be reached. Re-login preserves the mounted
-workspace; a full browser reload may still lose unsaved work.
+- GET `/health`, `/api/auth/status`, `/api/guest/samples/{name}` (three allowlisted samples).
+- POST `/api/guest/starters/{kind}` (fresh model, no DB record).
+- POST `/api/guest/upload` (validate/decode only the submitted image, return its model and processed images).
+- POST `/api/guest/structure` (validate submitted geometry without saving).
+- POST `/api/guest/analysis` (analyze submitted geometry/configuration without any database lookup).
 
-All backend paths, including samples, uploads, structure processing, design CRUD,
-analyses, metrics and API documentation, require a session. Only `GET /health`,
-`GET /api/auth/status`, and `POST /api/auth/login` are public; CORS preflight is
-handled before authentication. Authorization headers are allowed for the exact
-configured frontend origins; credentialed cookies are not used. API responses are
-marked no-store. Hosted-demo startup fails if the password is missing or shorter
-than 16 characters. Local development needs no password when both demo settings
-are absent; setting a password also enables authentication outside demo mode.
+Upload scratch files use per-request temporary directories cleaned on success and
+failure. No guest upload/design is persisted in shared SQLite. Furniture stays in
+local designs; only analysis submissions omit props because cultural rules do not
+use furniture. Shared CRUD/artifacts, global metrics/telemetry, simulator controls
+and API docs remain guarded. No credential is delivered to visitors. Guest
+telemetry is browser-local; global adaptation history is not exposed. Administrative
+simulations report unavailability explicitly. Editing, furniture, versions,
+comparison, exports and traditional-rule analysis reuse the existing UI/handlers.
 
-Fixed server-side limits (global across mentors, not per claimed client IP):
+Limits are global: 120 guest requests/minute, 5 uploads/minute, 60 other computation
+requests/minute, one computation at a time. Files: 10 MB, multipart bodies: 11 MB,
+guest images: 4 megapixels, other guest bodies: 512 KB; geometry counts are bounded.
+Limits do not trust forwarded IP headers and reset on restart. They are not DDoS
+protection or execution timeouts. Host memory/time still needs verification.
+Uploads leave the browser temporarily: use samples/non-sensitive plans. Render
+SQLite remains ephemeral, but guest versions no longer depend on it.
+[Render free-storage limitations](https://render.com/docs/free).
 
-- 10 login attempts/minute, including successful attempts.
-- 5 upload attempts/minute; existing 10 MB/image-pixel validation remains.
-- 60 other expensive starter/analysis requests/minute; one upload/analysis/starter
-  computation at a time. Busy requests receive 429, not an unbounded queue.
-- 120 authenticated mutation attempts/minute and an 11 MB total request-body cap
-  (including streamed bodies); login bodies are capped at 1 KB.
+## Deployment order and manual checks
 
-Limits and sessions live in process memory: keep **one worker, one instance**.
-Restart resets them. These bounds are not DDoS protection or a processing timeout;
-image-processing memory and worst-case processing time still need host validation.
-The shared password provides no individual audit trail or individual revocation.
-Rotate it and restart the service to revoke all access if disclosed. An XSS or
-stolen bearer token can act as a mentor until expiry. Use HTTPS only. Session design
-reference: [OWASP session management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html).
+1. After reviewing/publishing changes, redeploy Render with the variables above.
+   Verify `/health` is 200, guest samples/starters work, Cloudflare-origin preflight
+   succeeds, and anonymous shared-record routes remain 401.
+2. Rebuild/redeploy Cloudflare with its Production variables, then hard-refresh.
+   The app should open without a password. In Network tools verify HTTPS Render
+   `/api/guest/` requests, never localhost/shared CRUD. Free Render cold starts may
+   still delay processing. Local save/duplicate/delete should make no CRUD request.
+3. Use two separate browser profiles: create different designs, save/reload,
+   duplicate/delete, test upload/Processed view, 2D corrections, 3D furniture and
+   analysis. An ID from the other profile must not load or modify any record.
 
-With `RESILIOSPACE_PUBLIC_DEMO=true`, all simulator POST actions (activate, clear,
-restore) and `/api/system/telemetry` return HTTP 403 before changing state. Telemetry
-is restricted because it can change global resilience mode, including degraded
-rendering and recovery. Read-only status routes remain available after login. Existing
-Control Center/Resilience Lab actions therefore cannot operate in this mode; no
-administrative bypass or browser-stored secret is provided. Local development keeps
-its existing behavior when the variable is absent/false. Never set false on an
-unauthenticated public service.
+No live settings, deployment, commit or push was performed in this task.
 
-**All authenticated mentors share the same data.** There are no per-user ownership
-checks: every mentor can read/change/delete accessible designs and plans. Use only
-sample/non-sensitive plans. Public frontend furniture assets remain public files;
-they contain no design data. Local browser autosave is not encrypted and can remain
-after locking the demo; use trusted devices. This is a restricted demo, not a
-general public upload service.
+## Focused validation
 
-## Storage and free-host limitations
-
-`/tmp/resiliospace-runtime` is deliberately ephemeral: SQLite (including design
-versions), uploads and debug artifacts are lost on restart/redeploy/idle shutdown.
-Browser local snapshots do not back up the server. Do not upload private plans or
-promise retention. Samples and GLBs are repository assets and survive redeployment.
-Durable use requires persistent storage/backups for the entire runtime directory;
-existing uploaded-file records contain absolute paths, so keep its mount path stable.
-Free Render services cannot attach persistent disks, sleep after inactivity, and
-have cold starts. Image-processing memory/concurrency still needs host validation.
-
-References: [Render FastAPI setup](https://render.com/docs/deploy-fastapi),
-[Python selection](https://render.com/docs/python-version),
-[free-service limitations](https://render.com/docs/free).
-
-## Focused local validation
-
-With `PYTHONPATH=src/backend`, ran `.venv/Scripts/python.exe -m pytest
-src/backend/tests/test_demo_auth.py src/backend/tests/test_deployment.py
-src/backend/tests/test_api.py -q`. Initially 52 passed and one streamed-body test
-failed. After fixing receive-side error handling, reran `test_demo_auth.py`:
-**26 passed**; the other **27 deployment/API tests passed** in the initial run.
-One existing Starlette/httpx deprecation warning remains. Coverage includes
-unauthenticated-route denial, wrong-password throttling, token expiry/revocation,
-CORS with Authorization, authenticated upload/artifact/design/structure/analysis,
-preserved simulator restrictions, request size/rate/concurrency bounds, temporary
-storage, and repository samples.
-After keeping logout session mutation on the event loop, reran the login/logout
-and streamed-body regressions: **2 passed**, 24 deselected.
-
-Frontend: `vitest run src/demoAuth.test.ts src/App.test.tsx
-src/components/StartExperience.test.tsx`: **10 passed**. `tsc --noEmit`: **passed**.
-Tests cover token headers, multipart uploads, sample requests, expiry, login failure,
-logout, API destination checks, and initial gate rendering. No hosted/browser login
-or host memory validation has been performed; no full suites or builds were run.
+- Backend: with `PYTHONPATH=src/backend`, `python -m pytest
+  src/backend/tests/test_guest.py src/backend/tests/test_demo_auth.py -q`:
+  **45 passed**, one existing Starlette/httpx deprecation warning.
+- Frontend: `vitest run src/guestWorkspace.test.ts src/demoAuth.test.ts
+  src/utils/autosave.test.ts src/App.test.tsx`: **14 passed**.
+  Guest-only tests rerun after the final structure-save mapping correction and
+  all-32-props snapshot assertion: **4 passed**.
+- Single frontend check: `tsc --noEmit`: **passed**. `git diff --check`: passed.
+- No full suites/builds or hosted redeployment/browser validation were run.

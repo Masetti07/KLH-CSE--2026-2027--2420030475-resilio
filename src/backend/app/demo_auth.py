@@ -1,6 +1,7 @@
 """Single-process shared-demo access; deliberately not multi-user authorization."""
 import hashlib
 import secrets
+import re
 from collections import deque
 from threading import Lock
 from time import monotonic
@@ -17,10 +18,12 @@ router = APIRouter(prefix="/api/auth", tags=["demo-access"])
 
 
 def enabled() -> bool:
-    return settings.public_demo or bool(settings.demo_password)
+    return settings.public_demo or settings.guest_demo or bool(settings.demo_password)
 
 
 def validate_configuration() -> None:
+    if settings.guest_demo and not settings.demo_password:
+        return  # Shared database routes stay locked; no password login is available.
     if enabled() and not 16 <= len(settings.demo_password) <= 256:
         raise ValueError("Set RESILIOSPACE_DEMO_PASSWORD to a strong 16–256 character shared password")
 
@@ -71,6 +74,8 @@ def status():
 
 @router.post("/login")
 async def login(request: Request):
+    if settings.guest_demo:
+        return JSONResponse({"detail": "Password login is disabled on the public guest demo."}, status_code=403)
     if not enabled():
         return JSONResponse({"required": False})
     try:
@@ -110,7 +115,13 @@ class DemoAccessMiddleware:
                 extra["Retry-After"] = "60"
             await JSONResponse({"detail": detail}, status_code=code, headers=extra)(scope, receive, send)
 
-        public = (method, path) in {("GET", "/health"), ("GET", "/api/auth/status"), ("POST", "/api/auth/login")}
+        guest = settings.guest_demo and (
+            method == "GET" and re.fullmatch(r"/api/guest/samples/[^/]+", path) is not None
+            or method == "POST" and (path in {"/api/guest/upload", "/api/guest/structure", "/api/guest/analysis"}
+                                     or re.fullmatch(r"/api/guest/starters/[^/]+", path) is not None))
+        public = guest or (method, path) in {("GET", "/health"), ("GET", "/api/auth/status"), ("POST", "/api/auth/login")}
+        if guest and not access.allow("guest", 120):
+            return await reply(429, "Public demo request limit reached. Wait one minute.")
         if not public:
             authorization = headers.get(b"authorization", b"").decode("latin-1")
             if not authorization.startswith("Bearer ") or not access.valid(authorization[7:]):
@@ -119,12 +130,12 @@ class DemoAccessMiddleware:
             return await reply(429, "Too many login attempts. Wait one minute.")
         if not public and method in {"POST", "PUT", "PATCH", "DELETE"} and not access.allow("writes", 120):
             return await reply(429, "Demo write limit reached. Wait one minute.")
-        upload = method == "POST" and path == "/api/plans/upload"
-        expensive = upload or (method == "POST" and (path.startswith("/api/plans/starters/")
+        upload = method == "POST" and path in {"/api/plans/upload", "/api/guest/upload"}
+        expensive = (guest and method == "POST") or upload or (method == "POST" and (path.startswith("/api/plans/starters/")
                     or path.startswith("/api/vastu/") or path.endswith("/vastu-analysis")))
         if expensive and not access.allow("uploads" if upload else "processing", 5 if upload else 60):
             return await reply(429, "Demo processing limit reached. Wait one minute.")
-        limit = 1024 if path == "/api/auth/login" else MAX_BODY
+        limit = 1024 if path == "/api/auth/login" else 512 * 1024 if guest and not upload else MAX_BODY
         try:
             length = int(headers.get(b"content-length", b"0"))
         except ValueError:

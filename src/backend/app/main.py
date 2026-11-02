@@ -10,6 +10,7 @@ from app.api.designs import router as designs_router
 from app.api.plans import router as plans_router
 from app.api.system import router as system_router
 from app.api.simulator import router as simulator_router
+from app.api.guest import router as guest_router
 from app.adaptation import engine as adaptation_engine
 from app.observability import observe_request
 from app.config import settings
@@ -32,6 +33,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(auth_router)
+app.include_router(guest_router)
 app.include_router(plans_router)
 app.include_router(designs_router)
 app.include_router(system_router)

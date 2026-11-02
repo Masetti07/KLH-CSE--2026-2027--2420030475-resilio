@@ -1,4 +1,5 @@
 import ApiImage from "./ApiImage";
+import { GUEST_DEMO } from "../demoAuth";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { activateSimulation, artifactUrl, clearSimulation, createDesign, createStarterPlan, deleteDesign, duplicateDesign, listDesigns, loadSimulationStatus, loadStructure, loadSystemStatus, previewVastuAssist, restoreAllSimulations, runVastuAnalysis, samplePlanFile, saveDesign, saveStructure, sendSystemTelemetry, uploadPlan } from "../api";
 import type { AdaptationEvent, Design, DesignConfiguration, Selection, SimulationScenario, SimulationStatus, Structure, SystemMetrics, SystemState, UploadResult, VastuAnalysis, VastuAssistPreview } from "../types";
@@ -29,7 +30,7 @@ import PropQuickEdit from "./PropQuickEdit";
 
 type Tab = "Original" | "Processed" | "Reconstruction" | "3D View";
 type Mode = "view" | "edit";
-const STORAGE_KEY = "resiliospace:last-plan";
+const STORAGE_KEY = GUEST_DEMO ? "resiliospace:guest:last-plan" : "resiliospace:last-plan";
 
 export default function Workspace({ startRequest = 0 }: { startRequest?: number }) {
   const [startView, setStartView] = useState<"home" | "samples" | "starters" | "blank_setup" | "upload" | "workspace">("home");

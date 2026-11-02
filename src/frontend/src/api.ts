@@ -23,7 +23,7 @@ export async function uploadPlan(file: File): Promise<UploadResult> {
   try {
     response = await apiFetch(`${API_BASE}/api/plans/upload`, { method: "POST", body });
   } catch {
-    throw new Error("The processing service is unavailable. Start the backend and try again.");
+    throw new Error("The processing service is unavailable. It may be waking up; try again shortly.");
   }
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { detail?: string } | null;

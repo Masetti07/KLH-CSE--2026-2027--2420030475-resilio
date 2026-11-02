@@ -1,4 +1,8 @@
-export const API_BASE = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
+import { guestWorkspace } from "./guestWorkspace";
+
+// Public deployment defaults contain no credentials; VITE_API_URL remains the override.
+export const API_BASE = (import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? "https://resiliospace-api.onrender.com" : "http://127.0.0.1:8000")).replace(/\/+$/, "");
+export const GUEST_DEMO = import.meta.env.VITE_GUEST_DEMO === "true" || (import.meta.env.PROD && import.meta.env.VITE_GUEST_DEMO !== "false");
 export const AUTH_EXPIRED = "resiliospace-auth-expired";
 export const AUTH_READY = "resiliospace-auth-ready";
 let token: string | null = null;
@@ -15,6 +19,7 @@ export function clearDemoSession() {
 }
 
 export async function authStatus(signal?: AbortSignal): Promise<{ required: boolean }> {
+  if (GUEST_DEMO) return { required: false };
   const response = await fetch(`${API_BASE}/api/auth/status`, { signal, cache: "no-store" });
   if (!response.ok) throw new Error("The demo service is unavailable. Try again shortly.");
   return response.json();
@@ -35,6 +40,7 @@ export async function loginDemo(password: string): Promise<void> {
 
 export async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
   if (!url.startsWith(`${API_BASE}/`)) throw new Error("Unexpected API destination.");
+  if (GUEST_DEMO) return guestWorkspace.fetch(url, init, API_BASE);
   const headers = new Headers(init.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const response = await fetch(url, { ...init, headers, cache: "no-store" });
