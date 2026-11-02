@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.adaptation import engine
 from app.api.system import _state
+from app.api.access import require_local_controls
 from app.simulator import SimulationScenario
 
 
@@ -17,7 +18,7 @@ def simulation_status() -> dict:
     return _response()
 
 
-@router.post("/scenarios/{scenario}/activate")
+@router.post("/scenarios/{scenario}/activate", dependencies=[Depends(require_local_controls)])
 def activate_simulation(scenario: SimulationScenario) -> dict:
     newly_activated = engine.simulator.activate(scenario)
     if scenario == SimulationScenario.LOW_RECONSTRUCTION_CONFIDENCE and newly_activated:
@@ -27,7 +28,7 @@ def activate_simulation(scenario: SimulationScenario) -> dict:
     return _response()
 
 
-@router.post("/scenarios/{scenario}/clear")
+@router.post("/scenarios/{scenario}/clear", dependencies=[Depends(require_local_controls)])
 def clear_simulation(scenario: SimulationScenario) -> dict:
     engine.simulator.clear(scenario)
     if scenario == SimulationScenario.PROCESSING_FAILURE:
@@ -38,7 +39,7 @@ def clear_simulation(scenario: SimulationScenario) -> dict:
     return _response()
 
 
-@router.post("/restore")
+@router.post("/restore", dependencies=[Depends(require_local_controls)])
 def restore_all_simulations() -> dict:
     engine.simulator.clear_all()
     engine.monitor.record_processing(0, engine.monitor.snapshot().reconstruction_confidence, failed=False)

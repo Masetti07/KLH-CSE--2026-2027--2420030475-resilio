@@ -1,9 +1,10 @@
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.adaptation import engine
+from app.api.access import require_local_controls
 from app.observability import RENDERER_FPS, RENDERER_TELEMETRY
 
 
@@ -67,7 +68,7 @@ def system_adaptations() -> dict:
     return {"items": engine.knowledge.adaptations(), "limit": engine.knowledge.policies.history_limit}
 
 
-@router.post("/telemetry")
+@router.post("/telemetry", dependencies=[Depends(require_local_controls)])
 def telemetry(payload: TelemetryPayload) -> dict:
     if payload.fps is not None or payload.frame_time_ms is not None or payload.renderer_health is not None:
         RENDERER_TELEMETRY.inc()
