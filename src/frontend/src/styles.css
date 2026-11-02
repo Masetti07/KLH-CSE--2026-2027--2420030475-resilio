@@ -260,3 +260,8 @@ footer { padding: 45px 24px; text-align: center; color: #66766f; font-size: 14px
 .prop-symbol.interactive { cursor: grab; }.prop-symbol.interactive:active { cursor: grabbing; }.prop-symbol.interactive:focus-visible { outline: none; filter: drop-shadow(0 0 7px #df853b); }
 @media (max-width: 900px) { .home-props-grid { grid-template-columns: repeat(2, minmax(110px, 1fr)); } }
 @media (max-width: 620px) { .home-props-heading { display: grid; }.home-props-grid { grid-template-columns: repeat(2, minmax(100px, 1fr)); } }
+:root .demo-access { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
+.demo-access-card { width: min(100%, 28rem); display: grid; gap: .9rem; padding: 1.5rem; border: 1px solid #d8dfd1; border-radius: 1rem; background: #faf9f3; }
+.demo-access-card h1 { font-size: 2rem; margin: 0; }
+.demo-access-card input { width: 100%; min-height: 2.75rem; }
+.demo-access-session { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: .75rem; padding: .5rem 1rem; font-size: .85rem; background: #faf9f3; }

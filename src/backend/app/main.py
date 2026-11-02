@@ -14,10 +14,12 @@ from app.adaptation import engine as adaptation_engine
 from app.observability import observe_request
 from app.config import settings
 from app.database.session import create_database
+from app.demo_auth import DemoAccessMiddleware, router as auth_router, validate_configuration
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    validate_configuration()
     settings.ensure_runtime_directories()
     create_database()
     yield
@@ -29,13 +31,7 @@ app = FastAPI(
     description="Local floor-plan processing, structural correction, design versions, and transparent traditional-rule analysis.",
     lifespan=lifespan,
 )
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["Content-Type"],
-)
+app.include_router(auth_router)
 app.include_router(plans_router)
 app.include_router(designs_router)
 app.include_router(system_router)
@@ -71,3 +67,14 @@ def health() -> dict[str, str]:
 @app.get("/metrics", tags=["observability"], include_in_schema=False)
 def prometheus_metrics() -> Response:
     return Response(content=generate_latest(), headers={"Content-Type": CONTENT_TYPE_LATEST})
+
+
+# CORS must wrap authentication so preflight and 401/429 responses reach the frontend.
+app.add_middleware(DemoAccessMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "Authorization"],
+)

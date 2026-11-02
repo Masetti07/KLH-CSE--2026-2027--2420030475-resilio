@@ -38,6 +38,7 @@ class Settings:
     allowed_extensions: frozenset[str] = frozenset({".png", ".jpg", ".jpeg"})
     cors_origins: list[str] = field(default_factory=cors_origins)
     public_demo: bool = field(default_factory=public_demo)
+    demo_password: str = field(default_factory=lambda: os.getenv("RESILIOSPACE_DEMO_PASSWORD", ""), repr=False)
 
     @property
     def uploads_dir(self) -> Path:
