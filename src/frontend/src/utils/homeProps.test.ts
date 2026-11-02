@@ -3,6 +3,7 @@ import type { Structure } from "../types";
 import { defaultDesignConfiguration, reconcileDesignConfiguration } from "./designState";
 import { addHomeProp, deleteHomeProp, HOME_PROP_CATALOG, homePropPosition, moveHomeProp, moveWallProp, offsetWallProp, PROP_DIMENSIONS, rotateHomeProp, wallInteriorSide, wallMountYaw, wallMoveControls } from "./homeProps";
 import { newFileResetState } from "./sessionState";
+import { GLB_FURNITURE, type GlbFurnitureType } from "./glbFurniture";
 
 const structure: Structure = {
   id: "plan", source_dimensions: { width: 100, height: 100 }, normalized_dimensions: { width: 1, height: 1 }, overall_confidence: 1,
@@ -12,12 +13,88 @@ const structure: Structure = {
 };
 
 describe("home props", () => {
-  it("offers exactly eight props in wall and room categories", () => {
-    expect(HOME_PROP_CATALOG.map((item) => item.type)).toEqual(["clock", "painting", "bed", "sofa", "table", "armchair", "cupboard", "flower_vase"]);
+  it("groups every display label exactly once without changing room placement", () => {
+    const expected = {
+      "Wall Decor": [
+            "Clock",
+            "Painting"
+      ],
+      "Bedroom": [
+            "Bed",
+            "Bunk Bed",
+            "Cupboard",
+            "Side Table with Drawers"
+      ],
+      "Living Room": [
+            "Sofa",
+            "Armchair",
+            "Design Sofa",
+            "Lounge Chair",
+            "Long Lounge Sofa",
+            "Coffee Table",
+            "TV Cabinet",
+        "TV"
+      ],
+      "Kitchen & Dining": [
+            "Fridge",
+            "Stove",
+            "Kitchen Cabinet",
+            "Kitchen Bar",
+            "Round Table",
+            "Modern Cushioned Chair",
+            "Table"
+      ],
+      "Bathroom": [
+            "Bathroom Sink",
+            "Bathtub",
+            "Toilet",
+            "Shower"
+      ],
+      "Study & Storage": [
+            "Desk",
+            "Desk Chair",
+            "Open Bookcase",
+            "Closed Bookcase"
+      ],
+      "Decor & Accessories": [
+            "Flower Vase",
+            "Round Floor Lamp",
+            "Potted Plant"
+      ]
+};
+    for (const [category, labels] of Object.entries(expected)) {
+      expect(HOME_PROP_CATALOG.filter((item) => item.category === category).map((item) => item.label).sort()).toEqual([...labels].sort());
+    }
+    expect(HOME_PROP_CATALOG.every((item) => !item.label.includes("Kenney"))).toBe(true);
+    expect(HOME_PROP_CATALOG.filter((item) => item.category !== "Wall Decor").every((item) => item.placement === "room")).toBe(true);
+  });
+
+
+  it("preserves all original choices and appends 24 GLB room props", () => {
+    expect(HOME_PROP_CATALOG.slice(0, 8).map((item) => item.type)).toEqual(["clock", "painting", "bed", "sofa", "table", "armchair", "cupboard", "flower_vase"]);
+    expect(HOME_PROP_CATALOG.slice(8).map((item) => item.type)).toEqual(Object.keys(GLB_FURNITURE));
+    expect(HOME_PROP_CATALOG.slice(8, 13).map((item) => item.type)).toEqual(["kenney_sink", "kenney_bathtub", "kenney_bookcase", "kenney_tv_cabinet", "kenney_desk_chair"]);
+    expect(HOME_PROP_CATALOG).toHaveLength(32);
+    expect(new Set(HOME_PROP_CATALOG.map((item) => item.type)).size).toBe(32);
+    expect(HOME_PROP_CATALOG.slice(13).every((item) => item.category && item.placement === "room")).toBe(true);
     expect(HOME_PROP_CATALOG.filter((item) => item.placement === "wall")).toHaveLength(2);
     expect(Object.keys(PROP_DIMENSIONS).sort()).toEqual(HOME_PROP_CATALOG.map((item) => item.type).sort());
     expect(PROP_DIMENSIONS.bed.width).toBeGreaterThan(PROP_DIMENSIONS.flower_vase.width);
     expect(PROP_DIMENSIONS.sofa.width).toBeGreaterThan(PROP_DIMENSIONS.armchair.width);
+  });
+
+  it.each(Object.keys(GLB_FURNITURE) as GlbFurnitureType[])("reuses room editing and persistence for %s without changing existing props", (type) => {
+    const original = addHomeProp(defaultDesignConfiguration(structure), structure, { kind: "room", id: "room" }, "bed").configuration;
+    const before = JSON.stringify(original);
+    expect(() => addHomeProp(original, structure, { kind: "wall", id: "wall" }, type)).toThrow("Select a room");
+    const { configuration, prop } = addHomeProp(original, structure, { kind: "room", id: "room" }, type);
+    const moved = moveHomeProp(configuration, structure, prop.id, { x: .6, y: .7 });
+    const rotated = rotateHomeProp(moved, prop.id, 45);
+    const recovered = reconcileDesignConfiguration(JSON.parse(JSON.stringify(rotated)), structure);
+    expect(recovered.props![1]).toMatchObject({ type, position: { x: .6, y: .7 }, rotation: 45 });
+    expect(recovered.props![0]).toEqual(original.props![0]);
+    expect(deleteHomeProp(recovered, prop.id).props).toEqual(original.props);
+    expect(JSON.stringify(original)).toBe(before);
   });
 
   it("adds movable furniture without changing structure or Vastu inputs", () => {

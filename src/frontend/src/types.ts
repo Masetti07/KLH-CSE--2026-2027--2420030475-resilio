@@ -44,7 +44,7 @@ export type FloorAppearance = { color: string; finish: FloorFinish };
 export type DoorConfiguration = { color: string; width: number; style: "standard" | "sliding" | "double" };
 export type WindowConfiguration = { color: string; width: number; height: number; style: "standard" | "wide" | "floor_to_ceiling" };
 export type RoomSemantic = { name: string | null; room_type: RoomType | null };
-export type HomePropType = "clock" | "painting" | "bed" | "sofa" | "table" | "armchair" | "cupboard" | "flower_vase";
+export type HomePropType = "clock" | "painting" | "bed" | "sofa" | "table" | "armchair" | "cupboard" | "flower_vase" | "kenney_sink" | "kenney_bathtub" | "kenney_bookcase" | "kenney_tv_cabinet" | "kenney_desk_chair" | "kenney_bed_bunk" | "kenney_side_table_drawers" | "kenney_lounge_design_sofa" | "kenney_lounge_chair" | "kenney_lounge_sofa_long" | "kenney_table_coffee" | "kenney_kitchen_fridge" | "kenney_kitchen_stove" | "kenney_kitchen_cabinet" | "kenney_kitchen_bar" | "kenney_table_round" | "kenney_chair_modern_cushion" | "kenney_toilet" | "kenney_shower" | "kenney_desk" | "kenney_bookcase_closed" | "kenney_lamp_round_floor" | "kenney_potted_plant" | "kenney_tv";
 export type HomeProp = { id: string; type: HomePropType; placement_type: "room" | "wall"; room_id: string | null; wall_id: string | null; position: Point; rotation: number; wall_offset: number };
 export type DesignConfiguration = {
   wall_height: number;

@@ -5,10 +5,12 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { PerspectiveCamera } from "three";
 import type { DesignConfiguration, Selection, Structure } from "../types";
 import { orientationArrow, structureWithEffectiveWallHeight } from "../utils/designState";
-import { cameraFrame, modelBounds, normalizedToWorld, openingTransform, openingVisualDepth, wallAngle, wallLength, wallMidpoint, wallThickness, worldScale, type ModelBounds } from "../utils/geometry";
+import { cameraFrame, modelBounds, openingTransform, openingVisualDepth, wallAngle, wallLength, wallMidpoint, wallThickness, worldScale, type ModelBounds } from "../utils/geometry";
 import { rendererSettings } from "../utils/rendererQuality";
 import ProceduralMaterial from "./ProceduralMaterial";
 import PropMeshes from "./PropMeshes";
+import { roomFloor } from "../utils/roomFloor";
+import OpeningDetails from "./OpeningDetails";
 
 type CameraCommand = { name: "reset" | "top" | "perspective"; sequence: number };
 
@@ -34,21 +36,25 @@ function TelemetryProbe({ onTelemetry }: { onTelemetry?: (fps: number, frameTime
   return null;
 }
 
-function Scene({ structure, design, selection, onSelect, command, bounds, performance, shadowMapSize, onTelemetry }: { structure: Structure; design?: DesignConfiguration; selection: Selection; onSelect: (selection: Selection) => void; command: CameraCommand; bounds: ModelBounds; performance: boolean; shadowMapSize: number; onTelemetry?: (fps: number, frameTime: number) => void }) {
+function Scene({ structure, design, selection, onSelect, command, bounds, performance, shadowMapSize, onTelemetry, onDesignChange }: { structure: Structure; design?: DesignConfiguration; selection: Selection; onSelect: (selection: Selection) => void; command: CameraCommand; bounds: ModelBounds; performance: boolean; shadowMapSize: number; onTelemetry?: (fps: number, frameTime: number) => void; onDesignChange?: (design: DesignConfiguration) => void }) {
   const scale = worldScale(structure);
   const gridSize = Math.max(bounds.width, bounds.depth) * 1.45;
   return <>
-    <hemisphereLight color="#fffdf7" groundColor="#68756e" intensity={1.45} />
-    <directionalLight position={[bounds.center.x + gridSize * .55, bounds.maxY + gridSize, bounds.center.z + gridSize * .4]} intensity={1.8} castShadow={!performance} shadow-mapSize-width={shadowMapSize} shadow-mapSize-height={shadowMapSize} />
+    <hemisphereLight color="#fff8ee" groundColor="#84939e" intensity={1.2} />
+    <directionalLight color="#fff4e5" position={[bounds.center.x + gridSize * .55, bounds.maxY + gridSize, bounds.center.z + gridSize * .4]} intensity={2} castShadow={!performance}
+      target-position={[bounds.center.x, 0, bounds.center.z]} onUpdate={(light) => light.target.updateMatrixWorld()}
+      shadow-mapSize-width={shadowMapSize} shadow-mapSize-height={shadowMapSize}
+      shadow-camera-left={-gridSize * .7} shadow-camera-right={gridSize * .7} shadow-camera-top={gridSize * .7} shadow-camera-bottom={-gridSize * .7}
+      shadow-camera-near={.1} shadow-camera-far={gridSize * 3 + bounds.height * 2} shadow-normalBias={.035} shadow-bias={-.0001} />
     <mesh position={[bounds.center.x, -0.045, bounds.center.z]} receiveShadow={!performance} onClick={(event) => { event.stopPropagation(); onSelect({ kind: "floor", id: structure.id }); }}>
       <boxGeometry args={[bounds.width, 0.09, bounds.depth]} /><meshStandardMaterial color={selection?.kind === "floor" ? "#d8b782" : "#e8e1d4"} roughness={.94} />
     </mesh>
     {structure.rooms.map((room) => {
-      const xs = room.polygon.map((point) => normalizedToWorld(point, scale).x); const zs = room.polygon.map((point) => normalizedToWorld(point, scale).z);
-      const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
+      const floor = roomFloor(room.polygon, scale, structure.walls, structure.openings);
+      if (!floor) return null;
       const appearance = design?.floor_appearances[room.id];
-      return <mesh key={room.id} position={[(minX + maxX) / 2, .015, (minZ + maxZ) / 2]} onClick={(event) => { event.stopPropagation(); onSelect({ kind: "room", id: room.id }); }}>
-        <boxGeometry args={[Math.max(.05, maxX - minX), .035, Math.max(.05, maxZ - minZ)]} /><ProceduralMaterial finish={appearance?.finish ?? "neutral"} color={appearance?.color ?? "#e8e1d4"} width={Math.max(.05, maxX - minX)} height={Math.max(.05, maxZ - minZ)} selected={selection?.kind === "room" && selection.id === room.id} />
+      return <mesh key={room.id} position={floor.position} rotation={[-Math.PI / 2, 0, 0]} scale={[floor.width, floor.depth, 1]} receiveShadow={!performance} onClick={(event) => { event.stopPropagation(); onSelect({ kind: "room", id: room.id }); }}>
+        <extrudeGeometry args={[floor.shape, { depth: .035, bevelEnabled: false, steps: 1 }]} /><ProceduralMaterial finish={appearance?.finish ?? "neutral"} color={appearance?.color ?? "#e8e1d4"} width={floor.width} height={floor.depth} selected={selection?.kind === "room" && selection.id === room.id} />
       </mesh>;
     })}
     {structure.walls.map((wall) => {
@@ -71,19 +77,20 @@ function Scene({ structure, design, selection, onSelect, command, bounds, perfor
       return <group key={opening.id} position={[transform.x, sill + height / 2, transform.z]} rotation={[0, -transform.angle, 0]} onClick={(event) => { event.stopPropagation(); onSelect({ kind: "opening", id: opening.id }); }}>
         {Array.from({ length: panels }, (_, index) => <mesh key={index} position={[panels === 2 ? (index ? 1 : -1) * (panelWidth / 2 + .025) : 0, 0, 0]} castShadow={!performance}>
           <boxGeometry args={[panelWidth, height, openingVisualDepth(wall, scale, isWindow)]} /><meshStandardMaterial color={selected ? "#ff8b30" : color} emissive={selected ? "#5d2100" : "#000000"} transparent={isWindow} opacity={isWindow ? .66 : 1} roughness={isWindow ? .22 : .65} metalness={isWindow ? .12 : 0} />
+          {(isDoor || isWindow) && <OpeningDetails kind={isDoor ? "door" : "window"} width={panelWidth} height={height} depth={openingVisualDepth(wall, scale, isWindow)} sill={sill} selected={selected} handleSide={panels === 2 && index === 1 ? -1 : 1} />}
         </mesh>)}
       </group>;
     })}
-    <PropMeshes structure={structure} design={design} selection={selection} onSelect={onSelect} performance={performance} />
+    <PropMeshes structure={structure} design={design} selection={selection} onSelect={onSelect} performance={performance} onDesignChange={onDesignChange} />
     <Grid args={[gridSize, gridSize]} position={[bounds.center.x, -.095, bounds.center.z]} cellSize={Math.max(.25, gridSize / 30)} sectionSize={Math.max(1, gridSize / 6)} cellColor="#acb6b0" sectionColor="#7e8d85" cellThickness={.45} sectionThickness={.75} fadeDistance={gridSize * 1.1} fadeStrength={1.3} />
     <CameraRig command={command} bounds={bounds} modelKey={structure.id} />
     <TelemetryProbe onTelemetry={onTelemetry} />
   </>;
 }
 
-type Props = { structure: Structure; design?: DesignConfiguration; selection: Selection; onSelect: (selection: Selection) => void; fullscreen: boolean; onToggleFullscreen: () => void; renderingQuality?: "NORMAL" | "PERFORMANCE"; available?: boolean; onTelemetry?: (fps: number, frameTime: number) => void };
+type Props = { structure: Structure; design?: DesignConfiguration; selection: Selection; onSelect: (selection: Selection) => void; fullscreen: boolean; onToggleFullscreen: () => void; renderingQuality?: "NORMAL" | "PERFORMANCE"; available?: boolean; onTelemetry?: (fps: number, frameTime: number) => void; onDesignChange?: (design: DesignConfiguration) => void };
 
-export default function ThreeViewer({ structure, design, selection, onSelect, fullscreen, onToggleFullscreen, renderingQuality = "NORMAL", available = true, onTelemetry }: Props) {
+export default function ThreeViewer({ structure, design, selection, onSelect, fullscreen, onToggleFullscreen, renderingQuality = "NORMAL", available = true, onTelemetry, onDesignChange }: Props) {
   const [command, setCommand] = useState<CameraCommand>({ name: "perspective", sequence: 0 });
   const renderStructure = useMemo(() => structureWithEffectiveWallHeight(structure, design), [design, structure]);
   const bounds = useMemo(() => modelBounds(renderStructure, worldScale(renderStructure)), [renderStructure]);
@@ -92,7 +99,7 @@ export default function ThreeViewer({ structure, design, selection, onSelect, fu
   if (!available) return <div className="renderer-fallback" role="status"><strong>3D rendering is temporarily unavailable.</strong><p>Your design is preserved and the 2D workspace remains available.</p></div>;
   return <div className="three-viewer">
     <div className="viewer-toolbar"><span>Approximate normalized geometry {design?.orientation !== null && design?.orientation !== undefined ? `· North ${orientationArrow(design.orientation)}` : ""}</span><div className="viewer-actions"><button onClick={() => issue("reset")}>Reset</button><button onClick={() => issue("top")}>Top</button><button onClick={() => issue("perspective")}>3D / Perspective</button><button className="fullscreen-button" aria-pressed={fullscreen} onClick={onToggleFullscreen}>{fullscreen ? "Exit fullscreen" : "Fullscreen 3D"}</button></div></div>
-    <div className="three-canvas"><Canvas shadows={settings.shadows} dpr={settings.dpr} camera={{ position: [8, 8, 8], fov: 42, near: .05, far: 150 }}><Scene structure={renderStructure} design={design} selection={selection} onSelect={onSelect} command={command} bounds={bounds} performance={renderingQuality === "PERFORMANCE"} shadowMapSize={settings.shadowMapSize} onTelemetry={onTelemetry} /></Canvas></div>
-    <div className="viewport-help" aria-label="3D navigation help"><span>Left drag: Orbit</span><span>Right drag: Pan</span><span>Scroll: Zoom</span></div>
+    <div className="three-canvas"><Canvas shadows={settings.shadows ? "soft" : false} dpr={settings.dpr} camera={{ position: [8, 8, 8], fov: 42, near: .05, far: 150 }}><Scene structure={renderStructure} design={design} selection={selection} onSelect={onSelect} command={command} bounds={bounds} performance={renderingQuality === "PERFORMANCE"} shadowMapSize={settings.shadowMapSize} onTelemetry={onTelemetry} onDesignChange={onDesignChange} /></Canvas></div>
+    <div className="viewport-help" aria-label="3D navigation help"><span>{onDesignChange ? "Left drag: Orbit / move floor prop" : "Left drag: Orbit"}</span><span>Right drag: Pan</span><span>Scroll: Zoom</span></div>
   </div>;
 }

@@ -85,5 +85,13 @@ describe.each([
     expect(top.position[1]).toBeGreaterThan(bounds.maxY);
     expect(perspective.near).toBeGreaterThan(0);
     expect(perspective.far).toBeGreaterThan(perspective.position[1]);
+    const offset = perspective.position.map((value, index) => value - perspective.target[index]);
+    const elevation = Math.atan2(offset[1], Math.hypot(offset[0], offset[2])) * 180 / Math.PI;
+    expect(elevation).toBeGreaterThan(40);
+    expect(elevation).toBeLessThan(50);
+    // Keep the existing bounding-sphere fit at the higher viewing angle.
+    const portrait = cameraFrame(bounds, .5, "perspective");
+    expect(Math.hypot(...portrait.position.map((value, index) => value - portrait.target[index])))
+      .toBeGreaterThan(Math.hypot(...offset));
   });
 });

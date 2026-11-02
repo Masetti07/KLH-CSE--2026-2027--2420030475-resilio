@@ -2,8 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Structure } from "../types";
 import { defaultDesignConfiguration } from "../utils/designState";
-import { addHomeProp, moveHomeProp, offsetWallProp, rotateHomeProp } from "../utils/homeProps";
+import { addHomeProp, FURNITURE_CATEGORIES, HOME_PROP_CATALOG, moveHomeProp, offsetWallProp, rotateHomeProp } from "../utils/homeProps";
 import PropQuickEdit from "./PropQuickEdit";
+import HomePropsPanel from "./HomePropsPanel";
+import PropSymbols from "./PropSymbols";
+import { GLB_FURNITURE, type GlbFurnitureType } from "../utils/glbFurniture";
+import { FurnitureBoundary } from "./GlbFurniture";
 
 const structure: Structure = { id: "p", source_dimensions: { width: 100, height: 100 }, normalized_dimensions: { width: 1, height: 1 }, overall_confidence: 1,
   processing_metadata: { pipeline_version: "test", stages: [], warnings: [], debug_images: {} }, editing_metadata: { revision: 0, modified_by: "manual", last_saved_at: null }, wall_height: 3,
@@ -11,6 +15,34 @@ const structure: Structure = { id: "p", source_dimensions: { width: 100, height:
   rooms: [{ id: "room", polygon: [{ x: .1, y: .1 }, { x: .9, y: .1 }, { x: .9, y: .9 }, { x: .1, y: .9 }], name: "Room", type: null, confidence: 1 }], openings: [] };
 
 describe("near-viewer prop controls", () => {
+  it.each(Object.keys(GLB_FURNITURE) as GlbFurnitureType[])("offers %s with existing controls and a visible 2D symbol", (type) => {
+    const { configuration, prop } = addHomeProp(defaultDesignConfiguration(structure), structure, { kind: "room", id: "room" }, type);
+    const selection = { kind: "prop" as const, id: prop.id };
+    const callbacks = { onChange: () => {}, onSelect: () => {} };
+    const controls = renderToStaticMarkup(<PropQuickEdit structure={structure} configuration={configuration} selection={selection} {...callbacks} />);
+    for (const label of ["Rotate Left", "Move prop left", "Delete"]) expect(controls).toContain(label);
+    const symbols = renderToStaticMarkup(<svg><PropSymbols props={[prop]} structure={structure} selection={selection} interactive onSelect={() => {}} onPointerDown={() => {}} /></svg>);
+    expect(symbols).toContain("<rect"); expect(symbols).toContain('role="button"'); expect(symbols).not.toContain("Kenney");
+    const panel = renderToStaticMarkup(<HomePropsPanel structure={structure} configuration={configuration} selection={{ kind: "room", id: "room" }} onShow2D={() => {}} {...callbacks} />);
+    for (const name of ["Bathroom Sink", "Bathtub", "Open Bookcase", "TV Cabinet", "Desk Chair"]) expect(panel).toContain(`Add ${name}`);
+    for (const category of FURNITURE_CATEGORIES) expect(panel).toContain(`<h4>${category.replaceAll("&", "&amp;")}</h4>`);
+    const label = HOME_PROP_CATALOG.find((item) => item.type === type)!.label;
+    expect(panel).toContain(`Add ${label}`);
+    expect(controls).toContain(`Selected: ${label}`);
+    expect(controls).not.toContain("Kenney");
+    expect(panel).not.toContain("Kenney");
+    expect(panel).not.toContain("Furniture &amp; Decor");
+    expect((panel.match(/<article /g) ?? []).length).toBe(32);
+    for (const item of HOME_PROP_CATALOG) expect(panel.split(`Add ${item.label}</button>`)).toHaveLength(2);
+  });
+
+  it("isolates a failed model behind its local fallback", () => {
+    const boundary = new FurnitureBoundary({ children: "model", fallback: "unavailable" });
+    expect(boundary.render()).toBe("model");
+    boundary.state = FurnitureBoundary.getDerivedStateFromError();
+    expect(boundary.render()).toBe("unavailable");
+    expect(new FurnitureBoundary({ children: "another model", fallback: "unavailable" }).render()).toBe("another model");
+  });
   it("exposes the room controls and uses the shared configuration helpers", () => {
     const { configuration, prop } = addHomeProp(defaultDesignConfiguration(structure), structure, { kind: "room", id: "room" }, "sofa");
     const html = renderToStaticMarkup(<PropQuickEdit structure={structure} configuration={configuration} selection={{ kind: "prop", id: prop.id }} onChange={() => {}} onSelect={() => {}} />);

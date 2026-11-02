@@ -1,13 +1,13 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { DesignConfiguration, DirectionalZone, Orientation, Selection, Structure } from "../types";
-import { cloneStructure, isStraightWall, moveRoom, pointOnWall, resizeRoom, translateWall, validCoordinate } from "../utils/editState";
+import { cloneStructure, dropOpeningOnWall, isStraightWall, moveRoom, resizeRoom, snapOpeningToWall, translateWall, validCoordinate, type OpeningSnap } from "../utils/editState";
 import { orientationArrow, roomDisplayName } from "../utils/designState";
 import { directionalZone, structuralBounds } from "../utils/orientation";
 import { moveHomeProp, moveWallProp } from "../utils/homeProps";
 import PropSymbols from "./PropSymbols";
 
-type Drag = { wallId: string; endpoint: "start" | "end" } | { wallId: string; pointerStart: { x: number; y: number }; original: Structure } | { openingId: string } | { propId: string } | { roomId: string; pointerStart: { x: number; y: number }; original: Structure } | { roomId: string; resize: true } | null;
+type Drag = { wallId: string; endpoint: "start" | "end" } | { wallId: string; pointerStart: { x: number; y: number }; original: Structure } | { openingId: string; pointerId: number } | { propId: string } | { roomId: string; pointerStart: { x: number; y: number }; original: Structure } | { roomId: string; resize: true } | null;
 
 type Props = {
   structure: Structure;
@@ -25,6 +25,7 @@ type Props = {
 
 export default function PlanSvg({ structure, editable = false, selection = null, onSelect, onChange, orientation = null, showZones = false, preferredZones = [], design = null, propEditable = false, onDesignChange }: Props) {
   const drag = useRef<Drag>(null);
+  const [openingPreview, setOpeningPreview] = useState<{ openingId: string; point: { x: number; y: number }; snap: OpeningSnap | null } | null>(null);
   const planBounds = structuralBounds(structure);
   const dimensions = structure.physical_dimensions;
 
@@ -32,11 +33,38 @@ export default function PlanSvg({ structure, editable = false, selection = null,
     return { x: Math.min(1, Math.max(0, (clientX - bounds.left) / bounds.width)), y: Math.min(1, Math.max(0, (clientY - bounds.top) / bounds.height)) };
   };
 
+  const openingPoint = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect(), size = Math.min(rect.width, rect.height);
+    // Match the square viewBox's centered letterboxing; never clamp an outside drop.
+    return { point: { x: (event.clientX - rect.left - (rect.width - size) / 2) / size, y: (event.clientY - rect.top - (rect.height - size) / 2) / size }, tolerance: 16 / size };
+  };
+  const finish = (event: ReactPointerEvent<SVGSVGElement>, cancel = false) => {
+    const active = drag.current;
+    if (active && "openingId" in active) {
+      if (event.pointerId !== active.pointerId) return;
+      drag.current = null;
+      if (!cancel && editable && onChange) {
+        const { point, tolerance } = openingPoint(event);
+        const next = dropOpeningOnWall(structure, active.openingId, point, tolerance);
+        if (next !== structure) onChange(next);
+      }
+      if (event.currentTarget.hasPointerCapture(active.pointerId)) event.currentTarget.releasePointerCapture(active.pointerId);
+    }
+    drag.current = null;
+    setOpeningPreview(null);
+  };
+
   const move = (event: ReactPointerEvent<SVGSVGElement>) => {
     if ((!editable && !propEditable) || !drag.current) return;
     const point = normalizedPoint(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect());
     if (!validCoordinate(point.x) || !validCoordinate(point.y)) return;
     const active = drag.current;
+    if ("openingId" in active) {
+      if (event.pointerId !== active.pointerId || !editable || !onChange) return;
+      const { point, tolerance } = openingPoint(event);
+      setOpeningPreview({ openingId: active.openingId, point, snap: snapOpeningToWall(structure, active.openingId, point, tolerance) });
+      return;
+    }
     if ("propId" in active) {
       if (propEditable && design && onDesignChange) {
         const prop = design.props?.find((item) => item.id === active.propId);
@@ -61,17 +89,12 @@ export default function PlanSvg({ structure, editable = false, selection = null,
       if (active.endpoint === "start") { target.start_x = point.x; target.start_y = point.y; }
       else { target.end_x = point.x; target.end_y = point.y; }
       if (Math.hypot(target.end_x - target.start_x, target.end_y - target.start_y) < 0.002) return;
-    } else {
-      const target = next.openings.find((item) => item.id === active.openingId);
-      if (!target) return;
-      const wall = next.walls.find((item) => item.id === target.wall_id);
-      target.position = wall ? pointOnWall(wall, point, target.width) : point;
     }
     onChange(next);
   };
 
   return (
-    <svg className="reconstruction-svg" viewBox="0 0 1000 1000" role="img" aria-label={`Structural plan with ${structure.walls.length} walls, ${structure.rooms.length} rooms, and ${structure.openings.length} openings`} onPointerMove={move} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }}>
+    <svg className="reconstruction-svg" viewBox="0 0 1000 1000" role="img" aria-label={`Structural plan with ${structure.walls.length} walls, ${structure.rooms.length} rooms, and ${structure.openings.length} openings`} onPointerMove={move} onPointerUp={(event) => finish(event)} onPointerCancel={(event) => finish(event, true)} onPointerLeave={(event) => finish(event, true)} onLostPointerCapture={(event) => { if (drag.current && "openingId" in drag.current) finish(event, true); }}>
       <rect width="1000" height="1000" fill="#fbfaf6" />
       {dimensions && (() => {
         const halfWidth = dimensions.width_m / dimensions.metres_per_normalized_unit * 500;
@@ -119,14 +142,16 @@ export default function PlanSvg({ structure, editable = false, selection = null,
           </>}
         </g>;
       })}
-      {structure.openings.map((opening) => {
+      {structure.openings.map((storedOpening) => {
+        const snap = openingPreview?.openingId === storedOpening.id ? openingPreview.snap : null;
+        const opening = snap ? { ...storedOpening, wall_id: snap.wallId, position: snap.position } : storedOpening;
         const selected = selection?.kind === "opening" && selection.id === opening.id;
         const low = opening.confidence < 0.6;
         const color = opening.probable_type === "door" ? "#dc7b2e" : opening.probable_type === "window" ? "#1689be" : "#d1a11d";
         const wall = structure.walls.find((item) => item.id === opening.wall_id);
         const angle = wall ? Math.atan2(wall.end_y - wall.start_y, wall.end_x - wall.start_x) * 180 / Math.PI : 0;
         const half = Math.max(20, opening.width * 500);
-        return <g key={opening.id} className={editable ? "selectable-shape" : ""} transform={`translate(${opening.position.x * 1000} ${opening.position.y * 1000}) rotate(${angle})`} onPointerDown={(event) => { if (!editable) return; onSelect?.({ kind: "opening", id: opening.id }); drag.current = { openingId: opening.id }; event.currentTarget.setPointerCapture(event.pointerId); }}>
+        return <g key={opening.id} className={editable ? "selectable-shape" : ""} transform={`translate(${opening.position.x * 1000} ${opening.position.y * 1000}) rotate(${angle})`} onPointerDown={(event) => { if (!editable || event.button !== 0) return; event.stopPropagation(); onSelect?.({ kind: "opening", id: opening.id }); drag.current = { openingId: opening.id, pointerId: event.pointerId }; event.currentTarget.ownerSVGElement!.setPointerCapture(event.pointerId); }}>
           {wall && opening.probable_type !== "unknown" ? <>
             <rect x={-half} y="-13" width={half * 2} height="26" fill="#fbfaf6" />
             {opening.probable_type === "window" ? <><line x1={-half} x2={half} y1="-5" y2="-5" stroke={color} strokeWidth="5" /><line x1={-half} x2={half} y1="5" y2="5" stroke={color} strokeWidth="5" /><line x1={-half} x2={-half} y1="-10" y2="10" stroke={color} strokeWidth="4" /><line x1={half} x2={half} y1="-10" y2="10" stroke={color} strokeWidth="4" /></> : <><line x1={-half} y1="0" x2={-half} y2={-half * 1.45} stroke={color} strokeWidth="5" /><path d={`M ${-half} ${-half * 1.45} A ${half * 1.45} ${half * 1.45} 0 0 1 ${half} 0`} fill="none" stroke={color} strokeWidth="3" strokeDasharray={low ? "5 4" : undefined} /></>}
@@ -136,6 +161,10 @@ export default function PlanSvg({ structure, editable = false, selection = null,
           <title>{structure.processing_metadata.pipeline_version === "starter-1" ? `${opening.id}: editable starter ${opening.probable_type}` : `${opening.id}: ${opening.probable_type}, ${Math.round(opening.confidence * 100)}% confidence, wall ${opening.wall_id ?? "unassociated"}`}</title>
         </g>;
       })}
+      {openingPreview && <g pointerEvents="none" role="status" aria-label={openingPreview.snap ? `Snap to ${openingPreview.snap.wallId}` : "No valid wall nearby; release to cancel"}>
+        <circle cx={(openingPreview.snap?.position.x ?? openingPreview.point.x) * 1000} cy={(openingPreview.snap?.position.y ?? openingPreview.point.y) * 1000} r="22" fill="none" stroke="#18352b" strokeWidth="3" strokeDasharray="5 4" />
+        <text x="20" y="975" fill="#18352b" fontSize="20">{openingPreview.snap ? `Snap to ${openingPreview.snap.wallId}` : "No valid wall nearby — release to cancel"}</text>
+      </g>}
       <PropSymbols props={design?.props ?? []} structure={structure} selection={selection} interactive={propEditable} onSelect={(id) => onSelect?.({ kind: "prop", id })} onPointerDown={(prop, event) => { event.stopPropagation(); onSelect?.({ kind: "prop", id: prop.id }); if (propEditable) { drag.current = { propId: prop.id }; event.currentTarget.setPointerCapture(event.pointerId); } }} />
       {orientation !== null && <g aria-label={`North orientation ${orientation} degrees`}><rect x="842" y="24" width="130" height="82" rx="12" fill="#ffffff" stroke="#476b5e" strokeWidth="3" /><text x="907" y="55" textAnchor="middle" fontSize="18" fontWeight="700" fill="#24463a">NORTH</text><text x="907" y="91" textAnchor="middle" fontSize="34" fill="#c2682c">{orientationArrow(orientation)}</text></g>}
     </svg>

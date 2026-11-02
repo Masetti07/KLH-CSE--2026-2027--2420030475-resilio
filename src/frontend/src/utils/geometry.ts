@@ -104,7 +104,7 @@ export function cameraFrame(bounds: ModelBounds, aspect: number, mode: "top" | "
     position = [target[0], bounds.maxY + distance, target[2] + 0.001];
   } else {
     distance = (bounds.radius / Math.sin(limitingFov / 2)) * 1.28;
-    const direction = { x: 1, y: 0.78, z: 1 };
+    const direction = { x: 1, y: 1.25, z: 0.85 };
     const length = Math.hypot(direction.x, direction.y, direction.z);
     position = [target[0] + distance * direction.x / length, target[1] + distance * direction.y / length, target[2] + distance * direction.z / length];
   }
