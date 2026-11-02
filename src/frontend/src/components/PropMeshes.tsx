@@ -2,6 +2,14 @@ import type { DesignConfiguration, HomePropType, Selection, Structure } from "..
 import { RoundedBox } from "@react-three/drei";
 import { normalizedToWorld, wallThickness, worldScale } from "../utils/geometry";
 import { homePropPosition, roomPropScale, wallMountYaw } from "../utils/homeProps";
+import { isGlbFurniture } from "../utils/glbFurniture";
+import GlbFurniture from "./GlbFurniture";
+import { useEffect, useMemo, useRef } from "react";
+import { useThree } from "@react-three/fiber";
+import type { Group } from "three";
+import { createFloorPropDrag } from "../utils/floorPropDrag";
+import { moveHomeProp } from "../utils/homeProps";
+import { roomFloorFootprint } from "../utils/roomFloor";
 
 type ShapeProps = { type: HomePropType; performance: boolean };
 const Box = ({ at, size, color, performance, radius = 0 }: { at: [number, number, number]; size: [number, number, number]; color: string; performance: boolean; radius?: number }) => radius
@@ -64,8 +72,19 @@ function Shape({ type, performance }: ShapeProps) {
   }
 }
 
-export default function PropMeshes({ structure, design, selection, onSelect, performance }: { structure: Structure; design?: DesignConfiguration; selection: Selection; onSelect: (selection: Selection) => void; performance: boolean }) {
+export default function PropMeshes({ structure, design, selection, onSelect, performance, onDesignChange }: { structure: Structure; design?: DesignConfiguration; selection: Selection; onSelect: (selection: Selection) => void; performance: boolean; onDesignChange?: (design: DesignConfiguration) => void }) {
   const scale = worldScale(structure);
+  const { camera, gl, controls } = useThree();
+  const latest = useRef({ design, onDesignChange });
+  const clickGuard = useRef(false);
+  latest.current = { design, onDesignChange };
+  const drag = useMemo(() => createFloorPropDrag({ canvas: gl.domElement, camera, controls: controls as unknown as { enabled: boolean } | null, scale, clickGuard,
+    commit: (id, position) => {
+      const current = latest.current;
+      if (current.design && current.onDesignChange) current.onDesignChange(moveHomeProp(current.design, structure, id, position));
+    },
+  }), [camera, gl, controls, scale, structure, design]);
+  useEffect(() => drag.connect(), [drag]);
   return <>{(design?.props ?? []).map((prop) => {
     const wall = prop.placement_type === "wall" ? structure.walls.find((item) => item.id === prop.wall_id) : undefined;
     if (prop.placement_type === "wall" && !wall) return null;
@@ -73,8 +92,16 @@ export default function PropMeshes({ structure, design, selection, onSelect, per
     const selected = selection?.kind === "prop" && selection.id === prop.id;
     const roomScale = roomPropScale(prop, structure);
     const wallDepth = wall ? wallThickness(wall, scale) / 2 + .07 : 0;
-    return <group key={prop.id} position={[point.x, wall ? Math.min(structure.wall_height - .4, 1.65) : .04, point.z]} rotation={[0, wall ? wallMountYaw(structure, wall) : -prop.rotation * Math.PI / 180, 0]} scale={wall ? 1 : roomScale} onClick={(event) => { event.stopPropagation(); onSelect({ kind: "prop", id: prop.id }); }}>
-      <group position={[0, 0, wallDepth]}><Shape type={prop.type} performance={performance} /></group>
+    return <group key={prop.id} position={[point.x, wall ? Math.min(structure.wall_height - .4, 1.65) : .04, point.z]} rotation={[0, wall ? wallMountYaw(structure, wall) : -prop.rotation * Math.PI / 180, 0]} scale={wall ? 1 : roomScale}
+      onPointerDown={(event) => {
+        if (wall || event.button !== 0) return;
+        event.stopPropagation();
+        onSelect({ kind: "prop", id: prop.id });
+        const room = structure.rooms.find((item) => item.id === prop.room_id);
+        if (room && onDesignChange && drag.start(event.nativeEvent, prop.id, event.eventObject as Group, prop.position, roomFloorFootprint(room.polygon, structure.walls, structure.openings))) event.nativeEvent.preventDefault();
+      }}
+      onClick={(event) => { event.stopPropagation(); onSelect({ kind: "prop", id: prop.id }); }}>
+      <group position={[0, 0, wallDepth]}>{isGlbFurniture(prop.type) ? <GlbFurniture type={prop.type} performance={performance} /> : <Shape type={prop.type} performance={performance} />}</group>
       {selected && (wall ? <Box at={[0, 0, wallDepth - .035]} size={[prop.type === "painting" ? .98 : .56, prop.type === "painting" ? .73 : .56, .015]} color="#ec8b43" performance={performance} /> : <mesh position={[0, .025, 0]} rotation={[-Math.PI / 2, 0, 0]}><ringGeometry args={[.6, .65, 32]} /><meshBasicMaterial color="#ec8b43" /></mesh>)}
     </group>;
   })}</>;

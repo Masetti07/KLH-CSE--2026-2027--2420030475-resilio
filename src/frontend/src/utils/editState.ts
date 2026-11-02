@@ -125,6 +125,47 @@ export function pointOnWall(wall: Wall, point: Point, width = 0): Point {
   return { x: wall.start_x + t * dx, y: wall.start_y + t * dy };
 }
 
+export type OpeningSnap = { wallId: string; position: Point; distance: number };
+
+export function snapOpeningToWall(structure: Structure, openingId: string, point: Point, tolerance: number): OpeningSnap | null {
+  const opening = structure.openings.find((item) => item.id === openingId);
+  if (!opening || ![point.x, point.y].every(validCoordinate) || !Number.isFinite(tolerance) || tolerance < 0 || !Number.isFinite(opening.width) || opening.width <= 0) return null;
+  let best: OpeningSnap | null = null;
+  for (const wall of structure.walls) {
+    if (![wall.start_x, wall.start_y, wall.end_x, wall.end_y].every(validCoordinate) || !Number.isFinite(wall.thickness) || wall.thickness <= 0) continue;
+    const dx = wall.end_x - wall.start_x, dy = wall.end_y - wall.start_y;
+    const length = Math.hypot(dx, dy);
+    if (length < .002 || opening.width > length) continue;
+    const t = ((point.x - wall.start_x) * dx + (point.y - wall.start_y) * dy) / (length * length);
+    if (t < 0 || t > 1) continue;
+    const position = pointOnWall(wall, point, opening.width);
+    const along = ((position.x - wall.start_x) * dx + (position.y - wall.start_y) * dy) / length;
+    if (along < opening.width / 2 - 1e-9 || along > length - opening.width / 2 + 1e-9) continue;
+    const distance = Math.hypot(point.x - position.x, point.y - position.y);
+    if (distance > tolerance) continue;
+    const occupied = structure.openings.some((other) => {
+      if (other.id === openingId || other.wall_id !== wall.id) return false;
+      if (!Number.isFinite(other.width) || other.width <= 0 || ![other.position.x, other.position.y].every(validCoordinate)) return true;
+      const separation = Math.abs((position.x - other.position.x) * dx + (position.y - other.position.y) * dy) / length;
+      return separation < (opening.width + other.width) / 2 + 1e-6;
+    });
+    if (!occupied && (!best || distance < best.distance - 1e-9 || Math.abs(distance - best.distance) <= 1e-9 && wall.id === opening.wall_id)) best = { wallId: wall.id, position, distance };
+  }
+  return best;
+}
+
+// One immutable structural commit keeps history, persistence and both renderers aligned.
+export function dropOpeningOnWall(structure: Structure, openingId: string, point: Point, tolerance: number): Structure {
+  const snap = snapOpeningToWall(structure, openingId, point, tolerance);
+  const opening = structure.openings.find((item) => item.id === openingId);
+  if (!snap || !opening || opening.wall_id === snap.wallId && Math.hypot(opening.position.x - snap.position.x, opening.position.y - snap.position.y) < 1e-9) return structure;
+  const next = cloneStructure(structure);
+  const target = next.openings.find((item) => item.id === openingId)!;
+  target.wall_id = snap.wallId;
+  target.position = snap.position;
+  return next;
+}
+
 export function addOpening(structure: Structure, wallId: string | null = null, type: Opening["probable_type"] = "unknown"): { structure: Structure; selection: Selection } {
   const next = cloneStructure(structure);
   const wall = next.walls.find((item) => item.id === wallId);

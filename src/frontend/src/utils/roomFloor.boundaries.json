@@ -1,0 +1,382 @@
+{
+  "sample_compact_2bed": {
+    "walls": [
+      {
+        "id": "wall-1",
+        "start_x": 0.083333,
+        "start_y": 0.113235,
+        "end_x": 0.177083,
+        "end_y": 0.113235,
+        "thickness": 0.020588,
+        "confidence": 0.833797
+      },
+      {
+        "id": "wall-2",
+        "start_x": 0.315625,
+        "start_y": 0.113235,
+        "end_x": 0.541667,
+        "end_y": 0.113235,
+        "thickness": 0.020588,
+        "confidence": 0.833797
+      },
+      {
+        "id": "wall-3",
+        "start_x": 0.648959,
+        "start_y": 0.113235,
+        "end_x": 0.916667,
+        "end_y": 0.113235,
+        "thickness": 0.020588,
+        "confidence": 0.833797
+      },
+      {
+        "id": "wall-4",
+        "start_x": 0.441667,
+        "start_y": 0.494118,
+        "end_x": 0.527084,
+        "end_y": 0.494118,
+        "thickness": 0.020588,
+        "confidence": 0.9
+      },
+      {
+        "id": "wall-5",
+        "start_x": 0.615625,
+        "start_y": 0.494118,
+        "end_x": 0.916667,
+        "end_y": 0.494118,
+        "thickness": 0.020588,
+        "confidence": 0.899448
+      },
+      {
+        "id": "wall-6",
+        "start_x": 0.083333,
+        "start_y": 0.887842,
+        "end_x": 0.714584,
+        "end_y": 0.887842,
+        "thickness": 0.020588,
+        "confidence": 0.9
+      },
+      {
+        "id": "wall-7",
+        "start_x": 0.775,
+        "start_y": 0.887842,
+        "end_x": 0.916667,
+        "end_y": 0.887842,
+        "thickness": 0.020588,
+        "confidence": 0.9
+      },
+      {
+        "id": "wall-8",
+        "start_x": 0.090625,
+        "start_y": 0.102941,
+        "end_x": 0.090625,
+        "end_y": 0.897059,
+        "thickness": 0.014583,
+        "confidence": 0.9
+      },
+      {
+        "id": "wall-9",
+        "start_x": 0.449285,
+        "start_y": 0.102941,
+        "end_x": 0.449285,
+        "end_y": 0.249264,
+        "thickness": 0.014583,
+        "confidence": 0.9
+      },
+      {
+        "id": "wall-10",
+        "start_x": 0.449285,
+        "start_y": 0.341912,
+        "end_x": 0.449285,
+        "end_y": 0.897059,
+        "thickness": 0.014583,
+        "confidence": 0.9
+      },
+      {
+        "id": "wall-11",
+        "start_x": 0.704167,
+        "start_y": 0.483824,
+        "end_x": 0.704167,
+        "end_y": 0.897059,
+        "thickness": 0.014583,
+        "confidence": 0.9
+      },
+      {
+        "id": "wall-12",
+        "start_x": 0.910417,
+        "start_y": 0.102941,
+        "end_x": 0.910417,
+        "end_y": 0.610294,
+        "thickness": 0.014583,
+        "confidence": 0.867299
+      },
+      {
+        "id": "wall-13",
+        "start_x": 0.910417,
+        "start_y": 0.739706,
+        "end_x": 0.910417,
+        "end_y": 0.897059,
+        "thickness": 0.014583,
+        "confidence": 0.867299
+      }
+    ],
+    "openings": [
+      {
+        "id": "opening-1",
+        "wall_id": "wall-1",
+        "position": {
+          "x": 0.246354,
+          "y": 0.104412
+        },
+        "width": 0.138542,
+        "probable_type": "window",
+        "confidence": 0.82
+      },
+      {
+        "id": "opening-2",
+        "wall_id": "wall-2",
+        "position": {
+          "x": 0.595313,
+          "y": 0.104412
+        },
+        "width": 0.107292,
+        "probable_type": "window",
+        "confidence": 0.82
+      },
+      {
+        "id": "opening-3",
+        "wall_id": "wall-13",
+        "position": {
+          "x": 0.917708,
+          "y": 0.675
+        },
+        "width": 0.091667,
+        "probable_type": "window",
+        "confidence": 0.82
+      },
+      {
+        "id": "opening-4",
+        "wall_id": "wall-10",
+        "position": {
+          "x": 0.444792,
+          "y": 0.295588
+        },
+        "width": 0.065625,
+        "probable_type": "door",
+        "confidence": 0.74
+      },
+      {
+        "id": "opening-5",
+        "wall_id": "wall-4",
+        "position": {
+          "x": 0.557292,
+          "y": 0.495588
+        },
+        "width": 0.060417,
+        "probable_type": "door",
+        "confidence": 0.74
+      },
+      {
+        "id": "opening-6",
+        "wall_id": "wall-6",
+        "position": {
+          "x": 0.744792,
+          "y": 0.9
+        },
+        "width": 0.060417,
+        "probable_type": "door",
+        "confidence": 0.74
+      }
+    ]
+  },
+  "one_bedroom_starter": {
+    "walls": [
+      {
+        "id": "wall-1",
+        "start_x": 0.1,
+        "start_y": 0.1,
+        "end_x": 0.5,
+        "end_y": 0.1,
+        "thickness": 0.012,
+        "confidence": 1.0
+      },
+      {
+        "id": "wall-2",
+        "start_x": 0.5,
+        "start_y": 0.1,
+        "end_x": 0.5,
+        "end_y": 0.5,
+        "thickness": 0.012,
+        "confidence": 1.0
+      },
+      {
+        "id": "wall-3",
+        "start_x": 0.1,
+        "start_y": 0.5,
+        "end_x": 0.5,
+        "end_y": 0.5,
+        "thickness": 0.012,
+        "confidence": 1.0
+      },
+      {
+        "id": "wall-4",
+        "start_x": 0.1,
+        "start_y": 0.1,
+        "end_x": 0.1,
+        "end_y": 0.5,
+        "thickness": 0.012,
+        "confidence": 1.0
+      },
+      {
+        "id": "wall-5",
+        "start_x": 0.5,
+        "start_y": 0.1,
+        "end_x": 0.9,
+        "end_y": 0.1,
+        "thickness": 0.012,
+        "confidence": 1.0
+      },
+      {
+        "id": "wall-6",
+        "start_x": 0.9,
+        "start_y": 0.1,
+        "end_x": 0.9,
+        "end_y": 0.5,
+        "thickness": 0.012,
+        "confidence": 1.0
+      },
+      {
+        "id": "wall-7",
+        "start_x": 0.5,
+        "start_y": 0.5,
+        "end_x": 0.9,
+        "end_y": 0.5,
+        "thickness": 0.012,
+        "confidence": 1.0
+      },
+      {
+        "id": "wall-8",
+        "start_x": 0.5,
+        "start_y": 0.5,
+        "end_x": 0.5,
+        "end_y": 0.9,
+        "thickness": 0.012,
+        "confidence": 1.0
+      },
+      {
+        "id": "wall-9",
+        "start_x": 0.1,
+        "start_y": 0.9,
+        "end_x": 0.5,
+        "end_y": 0.9,
+        "thickness": 0.012,
+        "confidence": 1.0
+      },
+      {
+        "id": "wall-10",
+        "start_x": 0.1,
+        "start_y": 0.5,
+        "end_x": 0.1,
+        "end_y": 0.9,
+        "thickness": 0.012,
+        "confidence": 1.0
+      },
+      {
+        "id": "wall-11",
+        "start_x": 0.9,
+        "start_y": 0.5,
+        "end_x": 0.9,
+        "end_y": 0.9,
+        "thickness": 0.012,
+        "confidence": 1.0
+      },
+      {
+        "id": "wall-12",
+        "start_x": 0.5,
+        "start_y": 0.9,
+        "end_x": 0.9,
+        "end_y": 0.9,
+        "thickness": 0.012,
+        "confidence": 1.0
+      }
+    ],
+    "openings": [
+      {
+        "id": "window-1",
+        "wall_id": "wall-1",
+        "position": {
+          "x": 0.3,
+          "y": 0.1
+        },
+        "width": 0.075,
+        "probable_type": "window",
+        "confidence": 1.0
+      },
+      {
+        "id": "window-2",
+        "wall_id": "wall-5",
+        "position": {
+          "x": 0.7,
+          "y": 0.1
+        },
+        "width": 0.075,
+        "probable_type": "window",
+        "confidence": 1.0
+      },
+      {
+        "id": "door-side-2",
+        "wall_id": "wall-2",
+        "position": {
+          "x": 0.5,
+          "y": 0.3
+        },
+        "width": 0.07,
+        "probable_type": "door",
+        "confidence": 1.0
+      },
+      {
+        "id": "door-3",
+        "wall_id": "wall-3",
+        "position": {
+          "x": 0.3,
+          "y": 0.5
+        },
+        "width": 0.07,
+        "probable_type": "door",
+        "confidence": 1.0
+      },
+      {
+        "id": "door-4",
+        "wall_id": "wall-7",
+        "position": {
+          "x": 0.7,
+          "y": 0.5
+        },
+        "width": 0.07,
+        "probable_type": "door",
+        "confidence": 1.0
+      },
+      {
+        "id": "door-side-4",
+        "wall_id": "wall-8",
+        "position": {
+          "x": 0.5,
+          "y": 0.7
+        },
+        "width": 0.07,
+        "probable_type": "door",
+        "confidence": 1.0
+      },
+      {
+        "id": "door-entrance",
+        "wall_id": "wall-4",
+        "position": {
+          "x": 0.1,
+          "y": 0.3
+        },
+        "width": 0.08,
+        "probable_type": "door",
+        "confidence": 1.0
+      }
+    ]
+  }
+}

@@ -1,10 +1,15 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { HomeProp, Selection, Structure } from "../types";
-import { HOME_PROP_CATALOG, homePropPosition, roomPropScale } from "../utils/homeProps";
+import { HOME_PROP_CATALOG, PROP_DIMENSIONS, homePropPosition, roomPropScale } from "../utils/homeProps";
+import { isGlbFurniture } from "../utils/glbFurniture";
 
 type Props = { props: HomeProp[]; structure: Structure; selection: Selection; interactive: boolean; onSelect: (id: string) => void; onPointerDown: (prop: HomeProp, event: ReactPointerEvent<SVGGElement>) => void };
 
 function SymbolShape({ type }: { type: HomeProp["type"] }) {
+  if (isGlbFurniture(type)) {
+    const size = PROP_DIMENSIONS[type];
+    return <rect x={-size.width * 50} y={-size.depth * 50} width={size.width * 100} height={size.depth * 100} rx="5" fill="#b6c2ad" stroke="#536756" strokeWidth="5" />;
+  }
   switch (type) {
     case "bed": return <><rect x="-87" y="-107" width="174" height="214" rx="13" fill="#d9b995" stroke="#604a38" strokeWidth="8" /><rect x="-76" y="-82" width="152" height="179" rx="10" fill="#f7f0e4" /><rect x="-74" y="-84" width="148" height="55" rx="8" fill="#c8d4bd" /><rect x="-68" y="-74" width="60" height="34" rx="8" fill="#fffaf1" /><rect x="8" y="-74" width="60" height="34" rx="8" fill="#fffaf1" /><rect x="-76" y="-20" width="152" height="116" rx="8" fill="#d9e2d3" /></>;
     case "sofa": return <><rect x="-103" y="-48" width="206" height="96" rx="15" fill="#b5bda5" stroke="#566c5c" strokeWidth="6" /><rect x="-83" y="-35" width="166" height="70" rx="10" fill="#e7e5d6" /><path d="M-28 -35v70M28 -35v70" stroke="#b0bbab" strokeWidth="5" /><rect x="-103" y="-48" width="18" height="96" rx="7" fill="#9aa88e" /><rect x="85" y="-48" width="18" height="96" rx="7" fill="#9aa88e" /></>;
